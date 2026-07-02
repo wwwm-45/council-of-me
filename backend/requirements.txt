@@ -1,0 +1,22 @@
+# Council of Me - Backend
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.0.0
+
+# Database (optional for Tier 0 in-memory; enable for production)
+asyncpg>=0.29.0
+
+# LLM (optional; mock used when not set)
+openai>=1.0.0
+
+# Multi-agent framework
+ag2[openai]>=0.6
+
+# Embedding (optional; mock used when not set)
+sentence-transformers>=2.2.0
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.26.0
+PyYAML>=6.0.2

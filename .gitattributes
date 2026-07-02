@@ -1,0 +1,4 @@
+# Normalize all text files to LF in the repository; Git auto-detects binary
+# files (PNG, etc.) and leaves them untouched. This prevents the recurring
+# CRLF flips on Windows hosts that produced whole-file diffs.
+* text=auto eol=lf

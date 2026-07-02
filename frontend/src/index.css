@@ -1,0 +1,251 @@
+@import "tailwindcss";
+
+/* Cinzel for the wordmark/title (font-serif utility). Scoped to elements that
+   opt in via `font-serif`; nothing else in the app uses serif. */
+@theme {
+  --font-serif: "Cinzel", ui-serif, Georgia, serif;
+}
+
+:root {
+  --reflection-bg-top: #0f172a;
+  --reflection-bg-bottom: #020617;
+  --reflection-accent: #818cf8;
+}
+
+@layer utilities {
+  .animate-slide-up {
+    animation: slide-up 0.3s ease-out;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out;
+  }
+  .animate-speaking {
+    animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  .animate-card-enter {
+    animation: card-enter 0.5s ease-out both;
+  }
+  .animate-draw-line {
+    animation: draw-line 0.8s ease-out both;
+  }
+  .animate-stage-pulse {
+    animation: stage-pulse 1.2s ease-in-out infinite;
+  }
+  /* Portrait chamber: twinkling starfield + drifting particles (duration/delay
+     are supplied per-element via inline style). */
+  .animate-twinkle {
+    animation: twinkle 4.5s ease-in-out infinite;
+  }
+  .animate-float-particle {
+    animation: float-particle linear infinite;
+  }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
+@keyframes card-enter {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes draw-line {
+  from { stroke-dashoffset: var(--line-length, 300); }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes stage-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+}
+
+/* Landscape map animations */
+@keyframes bloom {
+  from { opacity: 0; transform: scale(0.3); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes edgeDraw {
+  from { opacity: 0; }
+  to   { opacity: 0.5; }
+}
+/* Synthesis landscape star map: slow node glow, drifting selection ring, radial
+   ripples from the core, and dash "flow" travelling outward along the edges. */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes drift {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes ripple {
+  0%   { opacity: 0.45; transform: scale(0.65); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+@keyframes flow-outward {
+  to { stroke-dashoffset: -140; }
+}
+
+@layer utilities {
+  .animate-bloom { animation: bloom 0.5s ease-out both; }
+  .animate-edgeDraw { animation: edgeDraw 0.6s ease-out both; }
+  .animate-pulse-slow { animation: pulse-slow 4s ease-in-out infinite; }
+  .animate-float { animation: float 6s ease-in-out infinite; }
+}
+
+/* Immersive synthesis shell backdrop: indigo/violet nebula + faint starfield. */
+.synthesis-landscape__background {
+  background:
+    radial-gradient(circle at 28% 20%, rgb(49 46 129 / 22%), transparent 34%),
+    radial-gradient(circle at 82% 72%, rgb(88 28 135 / 16%), transparent 38%),
+    linear-gradient(180deg, #020617, #05070d 55%, #000);
+}
+.synthesis-landscape__background::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  background-image: radial-gradient(circle, rgb(255 255 255 / 45%) 1px, transparent 1px);
+  background-size: 180px 180px;
+  pointer-events: none;
+}
+
+/* Honour reduced-motion: keep the full information layout, drop continuous motion. */
+@media (prefers-reduced-motion: reduce) {
+  .synthesis-landscape *,
+  .synthesis-landscape *::before,
+  .synthesis-landscape *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Portrait chamber starfield / particle field */
+@keyframes twinkle {
+  0%, 100% { opacity: calc(var(--twinkle-base-opacity, 0.2) * 0.4); }
+  50% { opacity: var(--twinkle-base-opacity, 0.2); }
+}
+@keyframes float-particle {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) scale(0.8); }
+  10% { opacity: 0.85; }
+  85% { opacity: 0.5; }
+  100% { opacity: 0; transform: translate3d(14px, -120px, 0) scale(1.1); }
+}
+
+/* Thin translucent scrollbar for the dark immersive panels */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+/* ─── Homepage futurism: liquid-glass chrome (harvested, see ui-references.md) ─── */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.15) 20%,
+    rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.15) 80%, rgba(255, 255, 255, 0.45) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.liquid-glass-strong {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border: none;
+  box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+.liquid-glass-strong::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.2) 20%,
+    rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.2) 80%, rgba(255, 255, 255, 0.5) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Decorative wordmark face — luminous blue-white halo matching the intro title
+   (intro uses layered #8ab4f8 + white blur spans; here approximated with stacked
+   text-shadows so the /start wordmark "glows" the same way). */
+.wordmark {
+  font-family: 'Cinzel', 'Times New Roman', serif;
+  letter-spacing: 0.32em;
+  font-weight: 400;
+  color: #f1f5f9;
+  text-shadow:
+    0 0 4px rgba(255, 255, 255, 0.5),
+    0 0 16px rgba(138, 180, 248, 0.55),
+    0 0 30px rgba(138, 180, 248, 0.32);
+}
+
+/* Word/char blur-in entrance (CSS-only; no Framer Motion) */
+@keyframes blur-in {
+  from { opacity: 0; filter: blur(10px); transform: translateY(12px); }
+  to   { opacity: 1; filter: blur(0);    transform: translateY(0); }
+}
+.blur-in-segment {
+  display: inline-block;
+  opacity: 0;
+  animation: blur-in 0.7s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .blur-in-segment { animation: none; opacity: 1; filter: none; transform: none; }
+}
