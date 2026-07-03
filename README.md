@@ -99,9 +99,6 @@ The Council of Me 是对这个问题的一次完整回答：从心理学理论�
 
 </details>
 
-> [!NOTE]
-> 📚 完整理论支撑（4 核心理论 + 3 支柱 + 111 篇文献、论证链、关键数据速查）见：[项目理论支撑文档](https://ncnh636ueqjq.feishu.cn/docx/Io8fds1cTodqqcxxuVNcc0eYnSd)
-
 ## 🎭 它是怎么运作的
 
 ### 🗣️ Step 1 · 对话：把乱麻理成「冲突地图」
