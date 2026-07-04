@@ -1,62 +1,8 @@
-const FRAGMENT_PATTERN = /[^,，、；;:：。！？?!]+(?:[,，、；;:：。！？?!]+|$)/gu;
 const SENTENCE_ENDING_CHARS = ['。', '！', '？', '!', '?', '；', ';'];
 const COMPLETE_SENTENCE_PATTERN = /[^。！？!?；;]+[。！？!?；;]+/gu;
 
 export function normalizeSubtitleContent(content: string): string {
   return content.replace(/\s+/g, ' ').trim();
-}
-
-function sliceTrailingWindow(
-  content: string,
-  maxLineChars: number,
-  maxLines: number,
-): string[] {
-  const maxChars = maxLineChars * maxLines;
-  const tail = normalizeSubtitleContent(content).slice(-maxChars);
-
-  if (!tail) {
-    return [];
-  }
-
-  if (maxLines === 1 || tail.length <= maxLineChars) {
-    return [tail];
-  }
-
-  const splitAt = Math.max(1, tail.length - maxLineChars);
-
-  return [tail.slice(0, splitAt).trim(), tail.slice(splitAt).trim()].filter(Boolean);
-}
-
-export function splitSubtitleFragments(content: string): string[] {
-  const normalized = normalizeSubtitleContent(content);
-  if (!normalized) {
-    return [];
-  }
-
-  return (normalized.match(FRAGMENT_PATTERN) ?? [])
-    .map((fragment) => fragment.trim())
-    .filter(Boolean);
-}
-
-export function buildSubtitleLines(
-  content: string,
-  options: { maxLineChars?: number; maxLines?: number } = {},
-): string[] {
-  const maxLineChars = options.maxLineChars ?? 18;
-  const maxLines = options.maxLines ?? 2;
-  const normalized = normalizeSubtitleContent(content);
-  const fragments = splitSubtitleFragments(normalized);
-
-  if (fragments.length === 0) {
-    return [];
-  }
-
-  const tail = fragments.slice(-maxLines);
-  if (tail.every((fragment) => fragment.length <= maxLineChars)) {
-    return tail;
-  }
-
-  return sliceTrailingWindow(normalized, maxLineChars, maxLines);
 }
 
 export function getCompletedSubtitleSentences(content: string): string[] {

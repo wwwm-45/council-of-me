@@ -16,7 +16,6 @@ from app.services.file_store import (
     load_debate_statements,
     save_debate_artifacts,
     save_debate_statements,
-    save_synthesis,
 )
 
 if TYPE_CHECKING:
@@ -85,58 +84,6 @@ class StreamBridge:
         artifacts = self._orch.get_artifacts()
         if artifacts:
             save_debate_artifacts(self._orch.session_id, artifacts)
-
-    def _persist_synthesis(self, synthesis_result: dict[str, Any]) -> None:
-        """Persist final synthesis alongside the latest artifacts."""
-        save_synthesis(self._orch.session_id, synthesis_result)
-        artifacts = self._orch.get_artifacts()
-        if artifacts:
-            save_debate_artifacts(self._orch.session_id, artifacts)
-
-    async def stream_full_debate(self) -> AsyncGenerator[str, None]:
-        """
-        Stream the entire remaining debate from current state to completion.
-        Includes all remaining rounds + synthesis.
-        """
-        from app.services.debate.round_state import DebatePhase
-
-        _R4_PHASES = (
-            DebatePhase.R4_REFLECTION,
-            DebatePhase.R4_MAPPING,
-            DebatePhase.R4_FINAL,
-        )
-
-        blocked_reason = self._get_blocked_reason()
-        if self._orch.current_phase == DebatePhase.ROUND1_OPENING and blocked_reason:
-            yield SSEEvent("error", {
-                "message": blocked_reason,
-                "kind": "preflight_blocked",
-            }).encode()
-            return
-
-        # Stream R1 if not yet done
-        if self._orch.current_phase == DebatePhase.ROUND1_OPENING:
-            async for event in self.stream_round1():
-                yield event
-
-        # Stream subsequent rounds
-        while not self._orch.is_done:
-            if self._orch.current_phase in _R4_PHASES:
-                async for event in self.stream_r4():
-                    yield event
-            else:
-                async for event in self.stream_round_n(allow_early_termination=False):
-                    yield event
-
-        # Stream synthesis
-        synthesis = self._orch.generate_synthesis()
-        self._persist_synthesis(synthesis)
-        async for event in self.stream_synthesis(synthesis):
-            yield event
-
-        yield SSEEvent("debate_complete", {
-            "total_rounds": self._orch.current_round,
-        }).encode()
 
     async def stream_round1(self) -> AsyncGenerator[str, None]:
         """
@@ -467,24 +414,6 @@ class StreamBridge:
         yield SSEEvent("agent_end", {
             "agent_id": statement["agent_id"],
             "statement_id": statement.get("statement_id", ""),
-        }).encode()
-
-    async def stream_synthesis(
-        self, synthesis_result: dict[str, Any],
-    ) -> AsyncGenerator[str, None]:
-        """Stream synthesis result in small chunks."""
-        yield SSEEvent("synthesis_start", {}).encode()
-
-        narrative = synthesis_result.get("narrative", "")
-        for chunk in self._split_chunks(narrative):
-            yield SSEEvent("synthesis_token", {
-                "content": chunk,
-            }).encode()
-            await asyncio.sleep(self._char_delay)
-
-        yield SSEEvent("synthesis_end", {
-            "synthesis_type": synthesis_result.get("synthesis_type", ""),
-            "voice_positions": synthesis_result.get("voice_positions", []),
         }).encode()
 
     def _get_round_artifact(self, round_num: int) -> dict[str, Any] | None:

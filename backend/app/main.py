@@ -12,8 +12,6 @@ from app.api.routes import (
     llm_models,
     elicitation,
     portrait,
-    complexity,
-    identity,
     debate,
     interventions,
     synthesis,
@@ -50,8 +48,6 @@ app.include_router(sessions.router)
 app.include_router(llm_models.router)
 app.include_router(elicitation.router)
 app.include_router(portrait.router)
-app.include_router(complexity.router)
-app.include_router(identity.router)
 app.include_router(debate.router)
 app.include_router(interventions.router)
 app.include_router(synthesis.router)

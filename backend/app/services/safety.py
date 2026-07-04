@@ -74,7 +74,6 @@ class SafetyMonitor:
         if matched_direct:
             return SafetyResult(
                 level=SafetyLevel.CRITICAL,
-                confidence=1.0,
                 matched_keywords=matched_direct,
             )
 
@@ -91,17 +90,14 @@ class SafetyMonitor:
         if semantic_score >= threshold_critical or (keyword_score >= threshold_critical and matched_direct):
             return SafetyResult(
                 level=SafetyLevel.CRITICAL,
-                confidence=final_score,
                 matched_keywords=matched,
             )
         if final_score >= threshold_warning:
             return SafetyResult(
                 level=SafetyLevel.WARNING,
-                confidence=final_score,
                 matched_keywords=matched,
             )
         return SafetyResult(
             level=SafetyLevel.SAFE,
-            confidence=1.0 - final_score,
             matched_keywords=[],
         )

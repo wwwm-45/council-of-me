@@ -6,18 +6,12 @@ from fastapi import APIRouter, Body, HTTPException
 
 from app.api.routes.sessions import _session_repo
 from app.services.debate_engine import get_debate_state, get_enhanced_synthesis
-from app.services.file_store import (
-    append_reflection as file_append_reflection,
-    save_session_meta,
-)
+from app.services.file_store import save_session_meta
 from app.services.reflection import (
     PATH_IDS,
-    append_reflection,
-    append_reflection_legacy,
     build_reflection_node_catalog,
     ensure_reflection_state,
     ensure_reflection_state_persisted,
-    generate_reflection_prompts,
     mark_node_feelings,
     mark_node_viewed,
     serialize_reflection_state,
@@ -218,45 +212,6 @@ async def reflection_trace(session_id: UUID):
     state = set_reflection_phase(str(session_id), "trace")
     trace = build_and_persist_reflection_trace(state)
     return trace
-
-
-@router.get("/{session_id}/reflection/prompts")
-async def get_reflection_prompts(session_id: UUID):
-    row = await _validate_session(
-        session_id,
-        ("debating", "synthesizing", "reflecting", "closing"),
-    )
-    profile = row.conflict_profile_snapshot or {}
-    identity_cards = row.identity_cards_snapshot or []
-    synthesis = await _resolve_reflection_synthesis(session_id, profile)
-    state = get_debate_state(str(session_id))
-    statements = state.get("statements") or []
-
-    prompts = generate_reflection_prompts(
-        synthesis,
-        profile,
-        identity_cards=identity_cards,
-        statements=statements,
-    )
-    return prompts
-
-
-@router.post("/{session_id}/reflection")
-async def post_reflection(session_id: UUID, body: dict = Body(...)):
-    row = await _validate_session(session_id)
-    await _ensure_reflecting(session_id, row.status)
-
-    level = body.get("level", "R1")
-    if "responses" in body:
-        responses = body["responses"]
-        append_reflection(str(session_id), level, responses)
-        file_append_reflection(session_id, {"level": level, "responses": responses})
-    else:
-        content = body.get("content", "")
-        append_reflection_legacy(str(session_id), level, content)
-        file_append_reflection(session_id, {"level": level, "content": content})
-
-    return {"ok": True}
 
 
 @router.post("/{session_id}/reflection/complete")

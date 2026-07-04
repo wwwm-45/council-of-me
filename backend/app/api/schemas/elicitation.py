@@ -39,7 +39,3 @@ class ElicitationResponse(BaseModel):
     safety_warning: Optional[str] = None
     portrait_quality: Optional[dict[str, Any]] = None
     requires_quality_confirmation: bool = False
-
-
-class ProfileConfirmBody(BaseModel):
-    use_as_is: bool = False

@@ -26,7 +26,6 @@ class AgentMemory:
     identity_card: dict[str, Any]
     my_statements: dict[int, list[str]] = field(default_factory=dict)  # round -> [content, ...]
     stance_evolution: list[str] = field(default_factory=list)
-    challenged_points: list[str] = field(default_factory=list)
     concessions: list[str] = field(default_factory=list)
     user_interventions_received: list[dict[str, Any]] = field(default_factory=list)
 
@@ -36,7 +35,6 @@ class SharedMemory:
     """Session-wide shared memory."""
     conflict_profile: dict[str, Any] = field(default_factory=dict)
     round_summaries: dict[int, str] = field(default_factory=dict)
-    consensus_points: list[str] = field(default_factory=list)
     user_interventions: list[dict[str, Any]] = field(default_factory=list)
     user_turns: list[dict[str, Any]] = field(default_factory=list)
     full_transcript: list[dict[str, Any]] = field(default_factory=list)
@@ -121,11 +119,6 @@ class MemoryManager:
         mem = self._agent_memories.get(agent_id)
         if mem:
             mem.concessions.append(text)
-
-    def record_challenge(self, agent_id: str, text: str) -> None:
-        mem = self._agent_memories.get(agent_id)
-        if mem:
-            mem.challenged_points.append(text)
 
     # -- Queries --
 

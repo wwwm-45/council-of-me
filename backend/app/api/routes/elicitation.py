@@ -14,7 +14,6 @@ from app.api.schemas.elicitation import (
     ElicitationEditBody,
     ElicitationFinishBody,
     ElicitationResponse,
-    ProfileConfirmBody,
 )
 from app.models.elicitation import DepthEvaluation, ElicitationOutcome, default_extracted_info
 from app.repositories.session_repo import SessionRepository
@@ -1057,59 +1056,6 @@ async def finish_elicitation(session_id: UUID, body: ElicitationFinishBody | Non
     )
 
 
-@router.post("/{session_id}/elicitation/resume")
-async def resume_elicitation(session_id: UUID):
-    repo = _get_repo()
-    row = await repo.get(session_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if row.status != "profile_pending":
-        raise HTTPException(status_code=409, detail={"expected_status": "profile_pending", "current_status": row.status})
-
-    await repo.update_status(session_id, "eliciting")
-    await repo.update_profile(session_id, conflict_profile_snapshot=None)
-
-    (
-        history,
-        extracted_info,
-        round_count,
-        depth_evaluations,
-        closing_revert_count,
-        current_layer,
-        layer_round_count,
-        is_containment,
-        containment_round_count,
-        tension_cards,
-        focus_card_id,
-        l1_own_count,
-        tension_probed_seen,
-        consecutive_intervene_count,
-        focus_trace,
-    ) = _load_elicitation_state(row.elicitation_history)
-    updated_state = _build_elicitation_state(
-        history=history,
-        extracted_info=extracted_info,
-        round_count=round_count,
-        depth_evaluations=depth_evaluations,
-        closing_revert_count=closing_revert_count + 1,
-        current_layer=current_layer,
-        layer_round_count=layer_round_count,
-        is_containment=is_containment,
-        containment_round_count=containment_round_count,
-        tension_cards=tension_cards,
-        focus_card_id=focus_card_id,
-        l1_own_count=l1_own_count,
-        tension_probed_seen=tension_probed_seen,
-        consecutive_intervene_count=consecutive_intervene_count,
-        focus_trace=focus_trace,
-    )
-    await repo.update_profile(session_id, elicitation_history=updated_state)
-    save_elicitation(session_id, updated_state)
-    save_conflict_profile(session_id, {})
-    save_session_meta(session_id, {"status": "eliciting"})
-    return {"ok": True, "status": "eliciting"}
-
-
 @router.put("/{session_id}/profile")
 async def put_profile(session_id: UUID, profile: dict[str, Any] = Body(...)):
     repo = _get_repo()
@@ -1124,7 +1070,7 @@ async def put_profile(session_id: UUID, profile: dict[str, Any] = Body(...)):
 
 
 @router.post("/{session_id}/profile/confirm")
-async def profile_confirm(session_id: UUID, body: ProfileConfirmBody | None = None):
+async def profile_confirm(session_id: UUID):
     repo = _get_repo()
     row = await repo.get(session_id)
     if not row:

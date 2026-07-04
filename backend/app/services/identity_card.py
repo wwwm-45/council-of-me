@@ -220,10 +220,3 @@ def build_identity_cards(
             base["specific_concern"] = dilemma
         cards.append(base)
     return cards
-
-
-def get_card_by_id(cards: list[dict], agent_id: str) -> Optional[dict]:
-    for c in cards:
-        if c.get("agent_id") == agent_id:
-            return c
-    return None

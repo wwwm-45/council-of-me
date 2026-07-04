@@ -270,16 +270,6 @@ def load_reflections(session_id: UUID | str) -> list:
     return data if isinstance(data, list) else []
 
 
-def append_reflection(session_id: UUID | str, reflection: dict) -> None:
-    """Append a single reflection to reflections.json."""
-    filepath = _session_dir(session_id) / "reflections.json"
-    existing = _read_json(filepath)
-    if not isinstance(existing, list):
-        existing = []
-    existing.append(reflection)
-    _write_json_atomic(filepath, existing)
-
-
 def save_reflection_state(session_id: UUID | str, state: dict) -> None:
     """Save/update reflection_state.json."""
     _write_json_atomic(_session_dir(session_id) / "reflection_state.json", state)
@@ -290,26 +280,9 @@ def save_reflection_trace(session_id: UUID | str, trace: dict) -> None:
     _write_json_atomic(_session_dir(session_id) / "reflection_trace.json", trace)
 
 
-def load_reflection_trace(session_id: UUID | str) -> dict:
-    """Load reflection_trace.json."""
-    data = _read_json(_session_dir(session_id) / "reflection_trace.json")
-    return data if isinstance(data, dict) else {}
-
-
 def save_closure_summary(session_id: UUID | str, summary: dict) -> None:
     """Save/update closure_summary.json."""
     _write_json_atomic(_session_dir(session_id) / "closure_summary.json", summary)
-
-
-def save_closure_emotion(session_id: UUID | str, emotion: dict) -> None:
-    """Save/update closure_emotion.json."""
-    _write_json_atomic(_session_dir(session_id) / "closure_emotion.json", emotion)
-
-
-def load_closure_emotion(session_id: UUID | str) -> dict:
-    """Load closure_emotion.json."""
-    data = _read_json(_session_dir(session_id) / "closure_emotion.json")
-    return data if isinstance(data, dict) else {}
 
 
 def _read_json(filepath: Path) -> Any:

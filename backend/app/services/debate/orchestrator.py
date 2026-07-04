@@ -64,15 +64,6 @@ FOLLOWUP_TRIGGER_PHASES = {DebatePhase.ROUND2_CROSS, DebatePhase.R3_ACKNOWLEDGE}
 # R4 final restates the agent's own reflection above this bigram overlap.
 R4_FINAL_REFLECTION_OVERLAP = 0.6
 
-# 5-level intensity instructions (from dev guide 鎼?.2.1)
-_INTENSITY_INSTRUCTIONS: dict[int, str] = {
-    1: "语气放得很轻，优先倾听和承接。",
-    2: "保持温和，但把你的判断说清楚。",
-    3: "用克制但明确的力度表达立场。",
-    4: "更直接地推进你的核心判断，正面咬住冲突。",
-    5: "把最强烈的立场挑明，语气可以更硬一些。",
-}
-
 _STANCE_OPENING_SIGNALS = (
     "我不同意",
     "不同意",
@@ -234,14 +225,12 @@ class DebateOrchestrator:
 
     def _sync_blackboard_from_legacy(self) -> None:
         self._blackboard.phase = self.current_phase
-        self._blackboard.paused = self._paused
         self._blackboard.position_map = self._position_map
         self._blackboard.tension_map = self._tension_map
         self._blackboard.engagement_record = self._engagement_record
         self._blackboard.convergence_map = self._convergence_map
         self._blackboard.transcript = []
         self._blackboard.exchange_count_this_phase = 0
-        self._blackboard.last_eval_exchange_count = 0
         self._blackboard.consecutive_stable = 0
         self._blackboard.evaluator_goal_met = False
         self._blackboard.phase_speaker_counts = {}
@@ -393,12 +382,10 @@ class DebateOrchestrator:
 
     def pause(self) -> None:
         self._paused = True
-        self._blackboard.paused = True
         logger.info("Debate paused: session=%s", self._session_id)
 
     def resume(self) -> None:
         self._paused = False
-        self._blackboard.paused = False
         logger.info("Debate resumed: session=%s", self._session_id)
 
     async def _compute_post_r3_convergence(self) -> float | None:
@@ -2402,40 +2389,6 @@ class DebateOrchestrator:
 
         self._all_statements.extend(responses)
         return responses
-
-    def handle_adjust_intensity(
-        self, target_agent_id: str, intensity: float,
-    ) -> bool:
-        """
-        Adjust an agent's expression intensity (1-5 scale).
-        Updates the agent's system prompt with intensity instructions.
-        Returns True if successful, False if agent not found.
-        """
-        agent = self._agent_map.get(target_agent_id)
-        if not agent:
-            return False
-
-        # Clamp to 1-5 and round to integer
-        level = max(1, min(5, round(intensity * 5) if intensity <= 1 else round(intensity)))
-        instruction = _INTENSITY_INSTRUCTIONS.get(level, _INTENSITY_INSTRUCTIONS[3])
-
-        card = agent.get_identity_card()
-        base_prompt = card.get("system_prompt", "")
-        new_prompt = f"{base_prompt}\n\n[当前表达强度: {level}/5]\n{instruction}"
-        agent.update_system_prompt(new_prompt)
-
-        self._memory.record_user_intervention({
-            "type": "adjust",
-            "target_agent_id": target_agent_id,
-            "intensity": intensity,
-            "level": level,
-        })
-
-        logger.info(
-            "Intensity adjusted: agent=%s, level=%d/5",
-            target_agent_id, level,
-        )
-        return True
 
     # -- Synthesis --
 

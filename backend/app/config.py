@@ -193,10 +193,6 @@ LLM_MAX_CONCURRENT: int = int(os.getenv("LLM_MAX_CONCURRENT", "3"))
 
 # Debate follow-up gate (asks the user 1-3 questions after R2 and R3.5)
 DEBATE_FOLLOWUP_ENABLED: bool = os.getenv("DEBATE_FOLLOWUP_ENABLED", "true").strip().lower() not in {"0", "false", "no", "off"}
-# Retired by card 2-C: the follow-up gate now blocks until the user answers or
-# skips, so this value is no longer enforced. Kept defined for backward compat
-# and easy rollback.
-DEBATE_FOLLOWUP_TIMEOUT_SEC: int = int(os.getenv("DEBATE_FOLLOWUP_TIMEOUT_SEC", "300"))
 
 # Embedding
 # Default is multilingual (Chinese-capable). To swap models, set EMBEDDING_MODEL
@@ -210,6 +206,3 @@ SESSION_EXPORT_DIR: str = os.getenv(
     "SESSION_EXPORT_DIR",
     str(WORKSPACE_ROOT / "sessions"),
 )
-
-# Encryption for sensitive fields (optional; key from env)
-ENCRYPTION_KEY: Optional[str] = os.getenv("COUNCIL_ENCRYPTION_KEY")

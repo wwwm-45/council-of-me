@@ -1,4 +1,4 @@
-"""Phase 4: Debate - start (Round 1), get state, SSE streaming."""
+"""Phase 4: Debate - next-round, debug-skip, SSE streaming."""
 from uuid import UUID
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -6,9 +6,7 @@ from fastapi.responses import StreamingResponse
 from app.api.routes.sessions import _session_repo
 from app.services.debate_engine import (
     cleanup_session,
-    run_round1,
     run_next_round,
-    get_debate_state,
     get_or_create_orchestrator,
     get_artifacts,
     seed_debate_state,
@@ -25,38 +23,6 @@ from app.services.file_store import (
 )
 
 router = APIRouter(prefix="/sessions", tags=["debate"])
-
-
-@router.post("/{session_id}/debate/start")
-async def debate_start(session_id: UUID):
-    """Run Round 1 (opening statements). Expects status=debating."""
-    repo = _session_repo
-    row = await repo.get(session_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if row.status != "debating":
-        raise HTTPException(status_code=409, detail={"expected_status": "debating", "current_status": row.status})
-    cards = row.identity_cards_snapshot or []
-    profile = row.conflict_profile_snapshot or {}
-    if not cards:
-        raise HTTPException(status_code=400, detail="Identity cards missing; confirm identity first.")
-    statements = await run_round1(str(session_id), cards, profile)
-    append_debate_round(session_id, statements)
-    artifacts = get_artifacts(str(session_id))
-    if artifacts:
-        save_debate_artifacts(session_id, artifacts)
-    return {"ok": True, "round": 1, "statements": statements}
-
-
-@router.get("/{session_id}/debate/state")
-async def debate_state(session_id: UUID):
-    """Return current debate round and statements."""
-    repo = _session_repo
-    row = await repo.get(session_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Session not found")
-    state = get_debate_state(str(session_id))
-    return state
 
 
 @router.post("/{session_id}/debate/debug-skip")
@@ -193,30 +159,3 @@ async def debate_stream_round(session_id: UUID):
         },
     )
 
-
-@router.post("/{session_id}/debate/stream-full")
-async def debate_stream_full(session_id: UUID):
-    """Stream the entire remaining debate (all rounds + synthesis) via SSE."""
-    row = await _get_debating_row(session_id)
-    cards = row.identity_cards_snapshot or []
-    profile = row.conflict_profile_snapshot or {}
-
-    orchestrator = get_or_create_orchestrator(str(session_id), cards, profile)
-    bridge = StreamBridge(orchestrator)
-
-    async def event_generator():
-        try:
-            async for event in bridge.stream_full_debate():
-                yield event
-        except Exception as e:
-            yield SSEEvent("error", {"message": str(e)}).encode()
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )

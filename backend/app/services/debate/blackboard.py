@@ -40,7 +40,6 @@ class DebateBlackboard(BaseModel):
     complexity: str
     dilemma: str
     phase: DebatePhase
-    paused: bool = False
     agents: dict[str, AgentState]
     position_map: PositionMap | None = None
     tension_map: TensionMap | None = None
@@ -49,7 +48,6 @@ class DebateBlackboard(BaseModel):
     transcript: list[StatementRecord] = Field(default_factory=list)
     interventions: list[dict[str, object]] = Field(default_factory=list)
     exchange_count_this_phase: int = 0
-    last_eval_exchange_count: int = 0
     consecutive_stable: int = 0
     evaluator_goal_met: bool = False
     phase_speaker_counts: dict[str, int] = Field(default_factory=dict)

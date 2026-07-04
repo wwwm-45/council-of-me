@@ -21,7 +21,3 @@ class ConsentBody(BaseModel):
 
 class FramingBody(BaseModel):
     framing: str = Field(..., description="inner_parts | perspective | advisory | neutral")
-
-
-class SafetyConfirmBody(BaseModel):
-    confirmations: list[bool] = Field(..., min_length=3, max_length=3)

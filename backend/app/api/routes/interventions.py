@@ -1,4 +1,4 @@
-"""User debate interventions: pause, resume, user turns, adjust, resonance."""
+"""User debate interventions: pause, resume, resonance, follow-up responses."""
 from uuid import UUID
 
 from fastapi import APIRouter, Body, HTTPException
@@ -6,7 +6,6 @@ from fastapi import APIRouter, Body, HTTPException
 from app.api.routes.sessions import _session_repo
 from app.services.debate_engine import (
     get_orchestrator,
-    handle_adjust_intensity as engine_adjust,
     handle_pause as engine_pause,
     handle_resume as engine_resume,
     record_resonance as engine_resonance,
@@ -73,30 +72,6 @@ async def debate_inject(session_id: UUID, body: dict = Body(...)):
 async def debate_user_turn(session_id: UUID, body: dict = Body(...)):
     """Removed. Formal user turns during the debate are no longer supported."""
     raise HTTPException(status_code=410, detail=_DEPRECATED_USER_TURN_DETAIL)
-
-
-@router.post("/{session_id}/debate/adjust")
-async def debate_adjust(session_id: UUID, body: dict = Body(...)):
-    """Adjust agent intensity. body: agent_id, intensity (0-1)."""
-    await _get_row(session_id)
-    agent_id = body.get("agent_id") or ""
-    intensity = body.get("intensity", 0.5)
-    applied = engine_adjust(str(session_id), agent_id, intensity)
-    record_intervention(
-        str(session_id),
-        "adjust",
-        target_agent_id=agent_id,
-        intensity=intensity,
-        round_number=body.get("round_number"),
-    )
-    append_intervention(session_id, {
-        "intervention_type": "adjust",
-        "type": "adjust",
-        "target_agent_id": agent_id,
-        "intensity": intensity,
-        "round_number": body.get("round_number"),
-    })
-    return {"ok": True, "applied": applied}
 
 
 @router.post("/{session_id}/debate/annotate")
@@ -207,25 +182,3 @@ async def debate_followup_response(session_id: UUID, body: dict = Body(...)):
         "status": "recorded" if cleaned else "skipped",
         "accepted": result.get("accepted", len(cleaned)),
     }
-
-
-@router.post("/{session_id}/debate/misalignment")
-async def debate_misalignment(session_id: UUID, body: dict = Body(...)):
-    """Mark a statement as misaligned. body: statement_id, agent_id, reason."""
-    await _get_row(session_id)
-    record_intervention(
-        str(session_id),
-        "misalignment",
-        target_agent_id=body.get("agent_id"),
-        content=body.get("reason") or "",
-        round_number=body.get("round_number"),
-    )
-    append_intervention(session_id, {
-        "intervention_type": "misalignment",
-        "type": "misalignment",
-        "statement_id": body.get("statement_id"),
-        "agent_id": body.get("agent_id"),
-        "reason": body.get("reason"),
-        "round_number": body.get("round_number"),
-    })
-    return {"ok": True}

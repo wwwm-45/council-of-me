@@ -15,10 +15,9 @@ from app.api.schemas.sessions import (
     CreateSessionResponse,
     ConsentBody,
     FramingBody,
-    SafetyConfirmBody,
 )
 from app.repositories.session_repo import SessionRepository
-from app.services.safety import CRISIS_RESOURCES, SafetyMonitor
+from app.services.safety import SafetyMonitor
 from app.services.file_store import (
     load_session_meta,
     save_conflict_profile,
@@ -235,35 +234,3 @@ async def framing(session_id: UUID, body: FramingBody):
     await repo.update_status(session_id, "eliciting")
     save_session_meta(session_id, {"framing_preference": body.framing, "status": "eliciting"})
     return {"ok": True, "status": "eliciting"}
-
-
-@router.get("/{session_id}/framing/suggest")
-async def framing_suggest(session_id: UUID, locale: str = "zh-CN"):
-    """Suggest default framing by locale (e.g. zh-CN -> inner_parts)."""
-    if locale.startswith("zh") or locale == "zh-CN":
-        return {"suggested": "inner_parts"}
-    return {"suggested": "perspective"}
-
-
-@router.post("/{session_id}/safety/confirm")
-async def safety_confirm(session_id: UUID, body: SafetyConfirmBody):
-    """User confirmed safety after crisis page return. Reset crisis state."""
-    repo = _get_repo()
-    row = await repo.get(session_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if not all(body.confirmations):
-        raise HTTPException(status_code=400, detail="All three confirmations required")
-    from datetime import datetime, timezone
-    await repo.update_profile(
-        session_id,
-        crisis_returned_at=datetime.now(timezone.utc),
-        rounds_since_crisis_return=0,
-    )
-    return {"ok": True}
-
-
-@router.get("/{session_id}/safety/crisis-resources")
-async def crisis_resources(session_id: UUID):
-    """Return crisis resources for frontend crisis page."""
-    return {"resources": CRISIS_RESOURCES}

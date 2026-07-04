@@ -12,7 +12,6 @@ class SafetyLevel(str, Enum):
 @dataclass
 class SafetyResult:
     level: SafetyLevel
-    confidence: float
     matched_keywords: list[str]
 
     def __post_init__(self) -> None:

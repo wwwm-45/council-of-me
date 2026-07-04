@@ -12,7 +12,6 @@ class VoiceEntryPoint:
     what_i_protect: str
     what_i_fear: str
     what_i_refuse_to_pay: str
-    what_i_misunderstand_about_others: str
 
 
 @dataclass(frozen=True)
@@ -20,7 +19,6 @@ class ActiveQuestion:
     question_id: str
     prompt_text: str
     tension_ids: list[str]
-    cost_tags: list[str]
 
 
 @dataclass(frozen=True)
@@ -174,9 +172,6 @@ class DebateSpineBuilder:
                         "走得太快之后，现实后果会砸到人身上",
                     ),
                     what_i_refuse_to_pay=strongest_cost,
-                    what_i_misunderstand_about_others=(
-                        "别人总是先讲代价，所以听起来才像没看见伤口。"
-                    ),
                 )
             elif agent_id == "rational_analyst":
                 entry_points[agent_id] = VoiceEntryPoint(
@@ -192,9 +187,6 @@ class DebateSpineBuilder:
                         "把用户锁进一个根本付不起的代价里",
                     ),
                     what_i_refuse_to_pay=second_cost,
-                    what_i_misunderstand_about_others=(
-                        "别人总像在暗示，只要冲动够强，代价就会自己消失。"
-                    ),
                 )
             elif agent_id == "critical_examiner":
                 entry_points[agent_id] = VoiceEntryPoint(
@@ -210,9 +202,6 @@ class DebateSpineBuilder:
                         "把渴望误认成准备好了",
                     ),
                     what_i_refuse_to_pay=self._pick_text(second_cost, strongest_cost),
-                    what_i_misunderstand_about_others=(
-                        "别人低估了幻想、取悦和自我包装会怎样带偏这个决定。"
-                    ),
                 )
             else:
                 entry_points[agent_id] = VoiceEntryPoint(
@@ -228,9 +217,6 @@ class DebateSpineBuilder:
                         "整场争论最后塌成一个假二选一",
                     ),
                     what_i_refuse_to_pay=self._pick_text(strongest_cost, second_cost),
-                    what_i_misunderstand_about_others=(
-                        "别人把不同类型的代价放进了同一本账里，好像它们能直接互换。"
-                    ),
                 )
 
         return entry_points
@@ -256,7 +242,6 @@ class DebateSpineBuilder:
                     question_id="q1",
                     prompt_text=f"现在更扛不住的代价到底是哪一个：失去{pole_a}，还是继续放弃{pole_b}？",
                     tension_ids=["tension:0"],
-                    cost_tags=cost_ledger[:2] or [pole_a, pole_b],
                 )
             )
 
@@ -268,7 +253,6 @@ class DebateSpineBuilder:
                     question_id=f"q{len(questions) + 1}",
                     prompt_text=f"这一步选择像是在说用户是个什么样的人：{layer_text}？",
                     tension_ids=[f"layer:{len(layers) - 1}"],
-                    cost_tags=cost_ledger[1:3] or cost_ledger[:2],
                 )
             )
 
@@ -281,7 +265,6 @@ class DebateSpineBuilder:
                     question_id=f"q{len(questions) + 1}",
                     prompt_text=f"当{emotion}一上来，它其实在拼命护住什么边界、责任或不敢碰的后果：{context}？",
                     tension_ids=["emotion:0"],
-                    cost_tags=cost_ledger[:2] or [emotion],
                 )
             )
 
@@ -292,7 +275,6 @@ class DebateSpineBuilder:
                     f"到底是什么让这个矛盾一直拖着不落地：{contradiction_subject}？"
                 ),
                 tension_ids=["core"],
-                cost_tags=cost_ledger[:2] or ["卡住"],
             ),
             ActiveQuestion(
                 question_id=f"q{len(questions) + 2}",
@@ -301,7 +283,6 @@ class DebateSpineBuilder:
                     "哪种失去、责任或恐惧会立刻变得最难回避？"
                 ),
                 tension_ids=["core"],
-                cost_tags=cost_ledger[2:4] or cost_ledger[:2] or ["失去", "害怕"],
             ),
         ]
 
@@ -317,7 +298,6 @@ class DebateSpineBuilder:
                         "而不是继续拖延的问题，最先需要面对的变化会是什么？"
                     ),
                     tension_ids=["core"],
-                    cost_tags=cost_ledger[:2] or ["取舍", "拖延"],
                 )
             )
 

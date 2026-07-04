@@ -268,18 +268,6 @@ def handle_resume(session_id: str) -> bool:
     return False
 
 
-def handle_adjust_intensity(
-    session_id: str,
-    target_agent_id: str,
-    intensity: float,
-) -> bool:
-    """Adjust agent intensity. Returns True if successful."""
-    orchestrator = _orchestrators.get(session_id)
-    if not orchestrator:
-        return False
-    return orchestrator.handle_adjust_intensity(target_agent_id, intensity)
-
-
 def cleanup_session(session_id: str) -> None:
     """Remove orchestrator and state for a completed session."""
     _orchestrators.pop(session_id, None)
