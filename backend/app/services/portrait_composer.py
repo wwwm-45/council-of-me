@@ -8,10 +8,11 @@ from app.models.elicitation import ElicitationOutcome
 from app.services.agent_mapper import AgentAssignment, AgentMapper
 from app.services.complexity_evaluator import ComplexityAssessment, ComplexityEvaluator
 
+# (agent_count, max_rounds); max_rounds mirrors debate.round_state.COMPLEXITY_ROUNDS
 _LEVEL_CONFIG: dict[str, tuple[int, int]] = {
-    "L1": (2, 3),
-    "L2": (4, 4),
-    "L3": (5, 5),
+    "L1": (2, 2),
+    "L2": (4, 3),
+    "L3": (5, 4),
 }
 
 

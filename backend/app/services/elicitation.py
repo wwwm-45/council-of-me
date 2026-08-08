@@ -19,8 +19,6 @@ from app.services.elicitation_control import filter_process_turns
 from app.services.elicitation_moves import (
     COVERAGE_PROBE_MOVES,
     MoveDispatcher,
-    consecutive_binary_questions,
-    is_binary_choice_question,
 )
 from app.services.intent_planner import IntentPlanner
 from app.services.llm import (
@@ -60,57 +58,58 @@ async def _default_llm(
 
 
 async def _default_llm_chat(messages: list[dict], system: Optional[str] = None) -> str:
-    return await llm_generate_chat_async(messages, system=system, temperature=0.75, max_tokens=1024)
+    return await llm_generate_chat_async(messages, system=system, temperature=0.5, max_tokens=1024)
 
 
 async def _default_llm_chat_stream(messages: list[dict], system: Optional[str] = None) -> AsyncIterator[str]:
-    async for chunk in llm_generate_chat_stream_async(messages, system=system, temperature=0.75, max_tokens=1024):
+    async for chunk in llm_generate_chat_stream_async(messages, system=system, temperature=0.5, max_tokens=1024):
         yield chunk
 
 
 _PROMPT_IDENTITY = (
-    "【身份】你是引导者，只帮助用户说清真正卡住的冲突；不下结论、不解释、不共情、不替用户解决问题。"
-    "问题核心要紧扣用户原话中的具体名词、具体事实、具体人物、具体时间或具体动作；"
-    "可以就这些具体点追问它的代价、意味或感受，但不要脱离具体、只问空泛的心理状态或抽象概念。"
+    "【角色】你是一位专注的困境访谈者。陪用户把他正在经历的核心困境慢慢说清楚，"
+    "不要急着解决，也不要为了收集信息而偏离这场困境。"
 )
 _PROMPT_FORM = (
-    "【形式】输出2-4句，最后一句是唯一问题。开头方式跨轮轮换、不要每轮都相同——"
-    "可在「承接用户上一句的具体点」「直接就某个细节发问」「用用户自己的说法反问」之间切换，"
-    "尤其不要连续两轮都以'你提到/你说到'起头。不评价、不解释、不下结论；"
-    "不得以嗯/好/好的/明白/收到/理解/了解开头；不得使用隐喻、AI腔、假设、解读或祝贺。"
+    "【交流原则】认真听用户刚说的话，像面对面谈话一样自然、平实，不做文学化概括。"
+    "每轮只顺着用户最新表达中的一个重点继续听，不复述整段背景，也不把两边列成选项让用户选择。"
+    "一次只问一个开放问题。"
+    "问题要让用户继续展开，而不是确认他已经明确说过的内容。"
+    "忠实理解，不替用户补全尚未表达的事实、感受或结论。"
+    "如果用户没有听懂，先把上一问解释清楚，再继续当前话题。"
 )
 
 
 MIN_ROUNDS = 3
 L1_MIN_ROUNDS = 2
 L1_MAX_ROUNDS = 3
-L2_MIN_ROUNDS = 2
+L2_MIN_ROUNDS = 3
 L3_MIN_ROUNDS = 2
-SOFT_TARGET_ROUND = 8
+SOFT_TARGET_ROUND = 9
 HARD_CLOSE_ROUND = 10
 SELF_STATEMENT_MIN_ROUND = 6
-ABSOLUTE_MAX_ROUNDS = 11
+ABSOLUTE_MAX_ROUNDS = 14
 MAX_CONTAINMENT_ROUNDS = 2
 
 _LAYER_PACE = {
-    1: "【节奏】L1 叙事落地：定位发生的事、人物、时间和已经做过的动作；也可以就其中某个具体点，问问当时让你在意或纠结的是什么，不必每轮都只停在事实细节上。",
-    2: "【节奏】L2 矛盾对峙：沿已出现的代价或限制追问；问句必须使用用户原话中的具体事实。",
-    3: "【节奏】L3 深层冲突：追问自我表述与行动的冲突；问句必须使用用户原话中的具体事实。",
+    1: "【当前方向】先顺着用户最后提到的一边继续理解，后续轮次再自然转向另一边。每个问题都服务于理解核心困境为什么成立；不研究某个选项的理想标准或领域细节，也不判断偏好、推动选择、盘点进度或讨论下一步安排。",
+    2: "【当前方向】仍不推动选择或规划行动。沿着同一个核心困境，继续理解两边分别牵动的担心、期待与代价。",
+    3: "【当前方向】在已经说清的拉扯上，理解更深的价值、信念或自我期待。",
 }
 _CONTAINMENT_PACE = "【节奏】容纳：情绪强烈，沿焦点只问一个最简单、最直白的问题，不展开。"
 _INTENT_DESC = {
-    "probe_fact": "问具体事实",
-    "probe_threshold": "问判断标准或边界",
-    "probe_cost": "问选择的具体代价",
-    "probe_fear": "问最怕的具体结果",
-    "probe_value_conflict": "问两项诉求的冲突",
-    "probe_identity_gap": "问自我表述与行动的落差",
-    "probe_unspoken": "问尚未说出的部分",
-    "probe_meaning": "问这件事对你意味着什么",
-    "probe_self_image": "问'我应当是什么样的人'与实际的落差",
-    "probe_belief": "问背后的判断或预设",
+    "probe_fact": "补足理解困境所需的事实",
+    "probe_threshold": "理解判断边界",
+    "probe_cost": "理解这一边带来的代价",
+    "probe_fear": "理解最担心发生的结果",
+    "probe_value_conflict": "理解两项诉求为何拉扯",
+    "probe_identity_gap": "理解自我期待与行动的落差",
+    "probe_unspoken": "理解仍未说出的关键部分",
+    "probe_meaning": "理解这件事为何重要",
+    "probe_self_image": "理解自我期待",
+    "probe_belief": "理解背后的判断前提",
     "containment": "承接强烈情绪，不推进",
-    "clarify_back": "澄清最近的具体说法",
+    "clarify_back": "解释上一问并修复理解",
     "hand_off": "停止追问并移交",
 }
 
@@ -120,12 +119,77 @@ _NEUTRAL_ACK_TOKENS = ("好的", "明白", "收到", "理解", "了解", "嗯", 
 _ACK_SEPARATORS = " \t\r\n。？，,!,.、：:；;！!"
 _SENTENCE_END_CHARS = "。！？!?"
 _TRAILING_CLOSERS = "”\"’'）)】"
-_FIXED_FORM_FEEDBACK = "\n【改写反馈】输出必须是2-4句、只在末句提出一个问题，并紧扣用户具体原话。"
-_BINARY_STREAK_LIMIT = 2
-_BINARY_RETRY_FEEDBACK = (
-    "\n【改写反馈】最近几轮都在让用户二选一。这一轮禁止「是A还是B」「更…的是哪一边/哪个」"
-    "式问题，改问一个开放问题：一个具体画面、某句原话的意味，或这件事对用户真正重要在哪。"
+_FIXED_FORM_FEEDBACK = "\n【改写反馈】请像自然访谈一样回应用户，只保留一个主要问题，并与用户刚说的内容连贯衔接。"
+_DIRECTION_RETRY_FEEDBACK = (
+    "\n【方向校正】现在仍是理解困境的阶段。忠实承接用户最后一句，同时回到对话罗盘指定的焦点，"
+    "邀请他展开这个焦点背后的原因、担心或在意。不要把一个例子继续拆成类别清单，"
+    "不要擅自改变事实属于哪一方，也不要讨论下一步方案。"
 )
+_PREMATURE_CHOICE_MARKERS = (
+    "还是",
+    "更偏向",
+    "更想选",
+    "更放不下",
+    "更担心",
+    "哪一头",
+    "哪一边",
+    "选哪",
+    "选择哪",
+)
+_ACTION_PLANNING_MARKERS = (
+    "怎么安排",
+    "怎么处理",
+    "打算怎么",
+    "准备怎么",
+    "接下来怎么",
+    "应该怎么",
+    "该怎么",
+)
+_PROGRESS_INVENTORY_MARKERS = (
+    "卡在什么",
+    "卡在哪里",
+    "卡在哪",
+    "没法收尾",
+    "写到哪",
+    "做到哪",
+    "进行到哪",
+    "还差多少",
+    "完成多少",
+    "进度怎么样",
+    "目前进度",
+)
+
+
+def _drifts_into_decision_or_planning(text: str, evaluation: DepthEvaluation) -> bool:
+    """Catch only high-level interview drift; wording remains model-owned."""
+    if evaluation.depth_layer >= 3 or evaluation.recommended_action in {"prepare_closing", "close"}:
+        return False
+    content = str(text or "")
+    markers = (
+        *_PREMATURE_CHOICE_MARKERS,
+        *_ACTION_PLANNING_MARKERS,
+        *_PROGRESS_INVENTORY_MARKERS,
+    )
+    return any(marker in content for marker in markers)
+
+
+def _build_direction_fallback(history: list[dict]) -> str:
+    """Minimal open turn used only after every model attempt leaves interview mode."""
+    user_turns = [
+        message
+        for message in history
+        if isinstance(message, dict) and message.get("role") == "user"
+    ]
+    if len(user_turns) >= 2:
+        return "你刚说的这一边已经清楚一些了。让你仍然犹豫的另一边，最牵动你的是什么？"
+    return "你刚才提到的这个点，对你来说为什么重要？"
+
+
+def _build_audit_fallback(*, fact_failed: bool) -> str:
+    """Safe output after all otherwise-usable candidates fail audit."""
+    if fact_failed:
+        return "我先确认一下，避免把你的意思理解反了。你刚才说的这个影响，具体对应的是哪一种处境？"
+    return "我想先回到这件事本身。这里还有哪个关键部分，是我们刚才没有说清的？"
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -193,12 +257,8 @@ def _post_process_main_output(text: str, evaluation: DepthEvaluation, *, intent:
     if evaluation.recommended_action == "close":
         return CLOSE_CANONICAL_TEXT
 
-    stripped = _strip_leading_ack(stripped)
-    if not stripped:
-        return ""
-
     sentences = _split_sentences(stripped)
-    if intent == "containment":
+    if intent == "containment" and evaluation.emotional_state == "intense":
         return sentences[0] if sentences else ""
 
     # Collapse to the first question when there are extra question marks OR a trailing
@@ -213,7 +273,7 @@ def _post_process_main_output(text: str, evaluation: DepthEvaluation, *, intent:
     if len(sentences) > 4:
         stripped = "".join(sentences[:4]).strip()
         sentences = _split_sentences(stripped)
-    if len(sentences) < 2 or not _ends_with_question(sentences[-1]):
+    if not sentences or not _ends_with_question(sentences[-1]):
         return ""
 
     return stripped
@@ -412,11 +472,19 @@ class ElicitationService:
             tension_cards=current_cards,
             current_layer=current_layer,
             latest_extracted_info=current_info,
+            current_focus_id=focus_card_id,
         ))
         merged_info, evaluation, planned = await asyncio.gather(extract_task, depth_task, plan_task)
 
         new_round = round_count + 1
         intent_plan = dict(planned) if isinstance(planned, dict) else {}
+        next_focus_trace = self._record_answered_focus(
+            focus_trace=focus_trace,
+            previous_focus_card_id=focus_card_id,
+            previous_round=round_count,
+            user_input=user_input,
+            semantic_relevance=intent_plan.get("focus_answer_relevant"),
+        )
         if evaluation.recommended_action != "close" and intent_plan.get("intent") == "hand_off":
             intent_plan["intent"] = "probe_unspoken"
 
@@ -459,7 +527,7 @@ class ElicitationService:
             current_layer=current_layer,
             focus_card_id=focus_card_id,
             l1_own_count=l1_own_count,
-            focus_trace=focus_trace,
+            focus_trace=next_focus_trace,
         )
         intent_plan = self._move_dispatcher.dispatch(
             plan=intent_plan,
@@ -471,11 +539,11 @@ class ElicitationService:
             coverage_probe_on_cooldown=coverage_probe_on_cooldown,
             meaning_probe_pending=meaning_probe_pending,
         )
+        intent_plan = self._bind_plan_to_focus(intent_plan, focus_card, merged_info)
         _move = intent_plan.get("move", "")
         fired_coverage_move = _move if _move in COVERAGE_PROBE_MOVES else ""
         if fired_coverage_move:
             self._coverage_probes += 1
-        binary_gate = consecutive_binary_questions(history) >= _BINARY_STREAK_LIMIT
         system_prompt = self._build_chat_system(
             extracted_info=merged_info,
             evaluation=evaluation,
@@ -483,7 +551,6 @@ class ElicitationService:
             focus_card=focus_card,
             intent_plan=intent_plan,
             user_display_name=user_display_name,
-            binary_gate=binary_gate,
         )
 
         yield {
@@ -504,7 +571,6 @@ class ElicitationService:
             evaluation=evaluation,
             intent_plan=intent_plan,
             system_prompt=system_prompt,
-            binary_gate=binary_gate,
         ):
             event_type = event.get("type")
             data = event.get("data") if isinstance(event.get("data"), dict) else {}
@@ -551,15 +617,7 @@ class ElicitationService:
         ]
         if focus_card is not None:
             updated_cards = self._tension_tracker.record_focus(updated_cards, focus_card.id, new_round)
-            next_focus_trace = list(focus_trace or [])
-            next_focus_trace.append({
-                "round": new_round,
-                "card_id": focus_card.id,
-                "useful": self._is_useful_focus_answer(user_input),
-            })
-            next_state["focus_trace"] = next_focus_trace
-        else:
-            next_state["focus_trace"] = list(focus_trace or [])
+        next_state["focus_trace"] = next_focus_trace
 
         final_evaluation = new_evaluations[-1]
         depth_payload = final_evaluation.to_dict()
@@ -630,11 +688,19 @@ class ElicitationService:
             tension_cards=current_cards,
             current_layer=current_layer,
             latest_extracted_info=current_info,
+            current_focus_id=focus_card_id,
         ))
         merged_info, evaluation, planned = await asyncio.gather(extract_task, depth_task, plan_task)
 
         new_round = round_count + 1
         intent_plan = dict(planned) if isinstance(planned, dict) else {}
+        next_focus_trace = self._record_answered_focus(
+            focus_trace=focus_trace,
+            previous_focus_card_id=focus_card_id,
+            previous_round=round_count,
+            user_input=user_input,
+            semantic_relevance=intent_plan.get("focus_answer_relevant"),
+        )
         if evaluation.recommended_action != "close" and intent_plan.get("intent") == "hand_off":
             intent_plan["intent"] = "probe_unspoken"
 
@@ -678,7 +744,7 @@ class ElicitationService:
             current_layer=current_layer,
             focus_card_id=focus_card_id,
             l1_own_count=l1_own_count,
-            focus_trace=focus_trace,
+            focus_trace=next_focus_trace,
         )
         intent_plan = self._move_dispatcher.dispatch(
             plan=intent_plan,
@@ -690,11 +756,11 @@ class ElicitationService:
             coverage_probe_on_cooldown=coverage_probe_on_cooldown,
             meaning_probe_pending=meaning_probe_pending,
         )
+        intent_plan = self._bind_plan_to_focus(intent_plan, focus_card, merged_info)
         _move = intent_plan.get("move", "")
         fired_coverage_move = _move if _move in COVERAGE_PROBE_MOVES else ""
         if fired_coverage_move:
             self._coverage_probes += 1
-        binary_gate = consecutive_binary_questions(history) >= _BINARY_STREAK_LIMIT
         system_prompt = self._build_chat_system(
             extracted_info=merged_info,
             evaluation=evaluation,
@@ -702,7 +768,6 @@ class ElicitationService:
             focus_card=focus_card,
             intent_plan=intent_plan,
             user_display_name=user_display_name,
-            binary_gate=binary_gate,
         )
         response, raw_response = await self._generate_audited_response(
             history=history,
@@ -710,7 +775,6 @@ class ElicitationService:
             intent_plan=intent_plan,
             system_prompt=system_prompt,
             stream_first=stream_first,
-            binary_gate=binary_gate,
         )
         history.append({"role": "assistant", "content": response})
 
@@ -737,15 +801,7 @@ class ElicitationService:
         )
         if focus_card is not None:
             updated_cards = self._tension_tracker.record_focus(updated_cards, focus_card.id, new_round)
-            next_focus_trace = list(focus_trace or [])
-            next_focus_trace.append({
-                "round": new_round,
-                "card_id": focus_card.id,
-                "useful": self._is_useful_focus_answer(user_input),
-            })
-            next_state["focus_trace"] = next_focus_trace
-        else:
-            next_state["focus_trace"] = list(focus_trace or [])
+        next_state["focus_trace"] = next_focus_trace
 
         return {
             "response": response,
@@ -926,14 +982,88 @@ class ElicitationService:
 
         return normalized
 
-    def _is_useful_focus_answer(self, user_input: str) -> bool:
+    def _is_useful_focus_answer(
+        self,
+        user_input: str,
+        *,
+        semantic_relevance: object = None,
+    ) -> bool:
         text = " ".join(str(user_input or "").split())
-        if len(text) < 12:
-            return False
-        thin_answers = {"是的", "对", "嗯", "一件产品吧", "不知道", "说不清"}
+        thin_answers = {
+            "是",
+            "是的",
+            "对",
+            "嗯",
+            "哦",
+            "好",
+            "一件产品吧",
+            "不知道",
+            "说不清",
+            "没想过",
+        }
         if text in thin_answers:
             return False
-        return True
+        if semantic_relevance is False:
+            return False
+        if semantic_relevance is True:
+            return len(text.strip("。！？!?，, ")) >= 2
+        return len(text.strip("。！？!?，, ")) >= 8
+
+    def _record_answered_focus(
+        self,
+        *,
+        focus_trace: list[dict[str, Any]] | None,
+        previous_focus_card_id: str | None,
+        previous_round: int,
+        user_input: str,
+        semantic_relevance: object,
+    ) -> list[dict[str, Any]]:
+        """Attach a user answer to the focus of the question it actually follows."""
+        trace = [dict(item) for item in (focus_trace or []) if isinstance(item, dict)]
+        if not previous_focus_card_id or previous_round <= 0:
+            return trace
+
+        entry = {
+            "round": previous_round,
+            "card_id": previous_focus_card_id,
+            "useful": self._is_useful_focus_answer(
+                user_input,
+                semantic_relevance=semantic_relevance,
+            ),
+        }
+        for index in range(len(trace) - 1, -1, -1):
+            existing = trace[index]
+            if (
+                existing.get("round") == previous_round
+                and existing.get("card_id") == previous_focus_card_id
+            ):
+                trace[index] = entry
+                break
+        else:
+            trace.append(entry)
+        return trace
+
+    def _bind_plan_to_focus(
+        self,
+        plan: dict[str, Any],
+        focus_card: TensionCard | None,
+        extracted_info: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Make the scheduler's selected focus authoritative for generation and audit."""
+        bound = dict(plan)
+        planned_quote = str(bound.get("focus_quote") or "").strip()
+        if focus_card is not None:
+            selected_quote = str(focus_card.raw_quote or "").strip()
+            if planned_quote and planned_quote != selected_quote:
+                bound["latest_evidence_quote"] = planned_quote
+            bound["focus_card_id"] = focus_card.id
+            bound["focus_quote"] = selected_quote
+            bound["focus_kind"] = focus_card.kind
+
+        core_dilemma = str((extracted_info or {}).get("core_dilemma") or "").strip()
+        if core_dilemma:
+            bound["core_dilemma"] = core_dilemma
+        return bound
 
     def _select_focus_card(
         self,
@@ -1018,6 +1148,17 @@ class ElicitationService:
         next_probed_seen = bool(tension_probed_seen) or any(
             card.status in {"probed", "layered", "saturated"} for card in coerced_cards
         )
+
+        if plan.get("user_turn_kind") == "clarify_request" or plan.get("intent") == "clarify_back":
+            return {
+                "current_layer": current_layer,
+                "layer_round_count": layer_round_count,
+                "is_containment": False,
+                "containment_round_count": 0,
+                "l1_own_count": next_l1_own_count,
+                "tension_probed_seen": next_probed_seen,
+                "consecutive_intervene_count": 0,
+            }
         probed_card_count = sum(
             1 for card in coerced_cards
             if card.status in {"probed", "layered", "saturated"}
@@ -1172,55 +1313,49 @@ class ElicitationService:
         current_layer = _normalize_active_layer(current_layer)
         plan = intent_plan if isinstance(intent_plan, dict) else {}
         intent = str(plan.get("intent") or "").strip()
-        focus_quote = str(plan.get("focus_quote") or "").strip()
-        avoid_quotes = plan.get("avoid_quotes") if isinstance(plan.get("avoid_quotes"), list) else []
-
-        if not focus_quote and focus_card is not None:
-            focus_quote = str(focus_card.raw_quote or "").strip()
 
         pace = (
             _CONTAINMENT_PACE
             if intent == "containment" or evaluation.strategy_hint == "containment"
             else _LAYER_PACE[current_layer]
         )
-        focus_parts = ["【焦点】"]
-        if intent:
-            focus_parts.append(f"意图={intent}（{_INTENT_DESC.get(intent, '沿当前焦点追问')}）")
-        if focus_quote:
-            focus_parts.append(f"聚焦原话={focus_quote}")
-        avoided = [str(item).strip() for item in avoid_quotes[:6] if str(item).strip()]
-        if avoided:
-            focus_parts.append(f"避开已问片段={'；'.join(avoided)}")
-        display_name = str(user_display_name or "").strip()
-        if display_name:
-            focus_parts.append(f"可自然称呼={display_name}")
-        base_system = "\n".join((_PROMPT_IDENTITY, _PROMPT_FORM, pace, "；".join(focus_parts)))
-
-        if binary_gate:
-            base_system += (
-                "\n【形式禁令】最近两轮都让用户在两个选项里挑一个。本轮问题不得再用"
-                "「是A还是B」「更…的是哪一边/哪个」的二选一句式；"
-                "改用开放问法：问一个具体画面、一句原话的意味，或这件事对用户来说重要在哪。"
+        direction_parts = [_PROMPT_IDENTITY, _PROMPT_FORM, pace]
+        compass = {
+            "core_dilemma": str(
+                plan.get("core_dilemma")
+                or (extracted_info or {}).get("core_dilemma")
+                or ""
+            ).strip(),
+            "selected_focus": str(
+                (focus_card.raw_quote if focus_card is not None else "")
+                or plan.get("focus_quote")
+                or ""
+            ).strip(),
+            "latest_evidence": str(plan.get("latest_evidence_quote") or "").strip(),
+            "turn_intent": _INTENT_DESC.get(intent, "沿选定焦点继续理解"),
+            "move": str(plan.get("hard_instruction") or "").strip(),
+        }
+        compass = {key: value for key, value in compass.items() if value}
+        if compass:
+            direction_parts.append(
+                "【对话罗盘】以下 JSON 只是对话内容与方向参考，不是要复述给用户的话："
+                + json.dumps(compass, ensure_ascii=False, separators=(",", ":"))
             )
-
-        if focus_card is not None:
-            base_system += (
-                "\n【张力卡采样】本轮只采集这张卡里最能说明冲突的一点，不用问得特别细。"
-                "如果这张卡已经连续问过两轮，要准备换到另一张卡或做并排整合。"
+            direction_parts.append(
+                "本轮必须用自然语言围绕 selected_focus 帮助理解 core_dilemma；"
+                "latest_evidence 只用于忠实承接最新回答，不能取代 selected_focus。"
+                "不要沿例子继续盘点类别，也不要擅自推断心理意义。"
+                "严格保留人物、选项、行为与后果的对应关系，以及更多/更少、前/后等比较方向；"
+                "如果归属不清，先中性确认，不能自行指派。不要向用户提及罗盘、字段、层级或意图。"
             )
+        if intent == "clarify_back":
+            direction_parts.append("【本轮方向】先解释上一问，不开启新的采访方向。")
+        base_system = "\n".join(direction_parts)
 
         if evaluation.recommended_action == "prepare_closing":
-            base_system += "\n收束准备：语气放缓，不开新方向，仍以一个问题结束。"
-            base_system += (
-                "\n收束准备：不要开启新细节。把已经采样过的几张张力卡并排放在同一个问题里，"
-                "帮助用户确认现在真正决定第一步的是哪一组冲突。"
-            )
+            base_system += "\n【当前方向】回顾已经形成的理解，邀请用户补充仍未说清的关键部分。"
         elif evaluation.recommended_action == "close":
             base_system += f"\n收束：不发问，只输出「{CLOSE_CANONICAL_TEXT}」"
-
-        hard_instruction = str(plan.get("hard_instruction") or "").strip()
-        if hard_instruction:
-            base_system += f"\n[战术指令]\n{hard_instruction}\n[/战术指令]"
 
         return base_system
 
@@ -1245,6 +1380,9 @@ class ElicitationService:
         retry_feedback = ""
         first_raw_response = ""
         last_question_raw = ""
+        direction_failed = False
+        audit_failed = False
+        fact_failed = False
 
         for attempt in range(3):
             prompt = system_prompt + retry_feedback
@@ -1268,12 +1406,12 @@ class ElicitationService:
                 retry_feedback = _FIXED_FORM_FEEDBACK
                 continue
 
-            # Binary-streak gate: two binary-choice turns in a row already shipped, so a
-            # third is rejected with feedback. The final attempt ships regardless — a
-            # well-formed binary question still beats a degraded turn.
-            if binary_gate and attempt < 2 and is_binary_choice_question(candidate):
-                retry_feedback = _BINARY_RETRY_FEEDBACK
-                continue
+            if intent not in {"clarify_back", "containment"} and _drifts_into_decision_or_planning(candidate, evaluation):
+                direction_failed = True
+                if attempt < 2:
+                    retry_feedback = _DIRECTION_RETRY_FEEDBACK
+                    continue
+                break
 
             verdict = await self._turn_auditor.audit(
                 candidate_text=candidate,
@@ -1283,17 +1421,23 @@ class ElicitationService:
             if str(verdict.get("verdict") or "").strip() != "rewrite":
                 return candidate, first_raw_response
 
+            audit_failed = True
+            fact_failed = fact_failed or verdict.get("fact_consistent") is False
             reason = self._safe_audit_reason(verdict.get("reason"))
             retry_feedback = (
                 f"\n【改写反馈】审核理由：{reason or '候选未通过意图或形式检查'}。"
                 "请遵循本轮意图重新生成。"
             )
 
-        # 否定降级: no canned _FALLBACK_TEMPLATES. Salvage the model's own best real
-        # question; only a clean quote-free minimal probe if no question exists anywhere.
-        degraded = _salvage_degraded_output(
-            last_question_raw or first_raw_response, evaluation, intent=intent
-        )
+        if direction_failed:
+            degraded = _build_direction_fallback(history)
+        elif audit_failed:
+            # Never ship a form-valid turn that the semantic/factual audit rejected.
+            degraded = _build_audit_fallback(fact_failed=fact_failed)
+        else:
+            degraded = _salvage_degraded_output(
+                last_question_raw or first_raw_response, evaluation, intent=intent
+            )
         return degraded, first_raw_response
 
     async def _generate_audited_response_stream(
@@ -1324,11 +1468,12 @@ class ElicitationService:
         last_raw_response = ""
         last_question_raw = ""
         retry_feedback = ""
+        direction_failed = False
+        audit_failed = False
+        fact_failed = False
 
-        # Three generation attempts before the degraded path (mirrors the sync path's
-        # budget). Only attempt 0 is audited (single audit pass); the later retries are
-        # trusted and emitted directly once they clear the form check, so an over-strict
-        # auditor rewrite no longer leaves just one shot at a clean turn.
+        # All usable attempts are audited. A rewritten retry must not bypass factual or
+        # focus checks merely because it is the second streamed candidate.
         for attempt in range(3):
             chunks: list[str] = []
             async for chunk in self._llm_chat_stream(history, system_prompt + retry_feedback):
@@ -1352,26 +1497,14 @@ class ElicitationService:
                     continue
                 break  # final attempt also failed the form check -> fallback
 
-            # Binary-streak gate (mirror of the sync path): reject a third consecutive
-            # binary-choice question with feedback; the final attempt ships regardless.
-            if binary_gate and attempt < 2 and is_binary_choice_question(candidate):
+            if intent not in {"clarify_back", "containment"} and _drifts_into_decision_or_planning(candidate, evaluation):
+                direction_failed = True
                 correction_count += 1
-                retry_feedback = _BINARY_RETRY_FEEDBACK
-                yield {"type": "correction", "data": {"reason": "二选一句式连用"}}
-                continue
-
-            if attempt >= 1:
-                # Trusted retry candidate: emit directly, no re-audit (single audit pass).
-                yield {
-                    "type": "complete",
-                    "data": {
-                        "response": candidate,
-                        "raw_response": raw_response,
-                        "correction_applied": True,
-                        "correction_count": correction_count,
-                    },
-                }
-                return
+                yield {"type": "correction", "data": {"reason": "访谈方向偏移"}}
+                if attempt < 2:
+                    retry_feedback = _DIRECTION_RETRY_FEEDBACK
+                    continue
+                break
 
             verdict = await self._turn_auditor.audit(
                 candidate_text=candidate,
@@ -1390,6 +1523,8 @@ class ElicitationService:
                 }
                 return
 
+            audit_failed = True
+            fact_failed = fact_failed or verdict.get("fact_consistent") is False
             correction_count += 1
             reason = self._safe_audit_reason(verdict.get("reason"))
             retry_feedback = (
@@ -1398,11 +1533,15 @@ class ElicitationService:
             )
             yield {"type": "correction", "data": {"reason": reason or "audit_rewrite"}}
 
-        # 否定降级: no canned _FALLBACK_TEMPLATES. Salvage the model's own best real
-        # question; only a clean quote-free minimal probe if no question exists anywhere.
-        degraded = _salvage_degraded_output(
-            last_question_raw or last_raw_response, evaluation, intent=intent
-        )
+        if direction_failed:
+            degraded = _build_direction_fallback(history)
+        elif audit_failed:
+            # Streaming retries use the same semantic/factual gate as the first attempt.
+            degraded = _build_audit_fallback(fact_failed=fact_failed)
+        else:
+            degraded = _salvage_degraded_output(
+                last_question_raw or last_raw_response, evaluation, intent=intent
+            )
         yield {
             "type": "complete",
             "data": {

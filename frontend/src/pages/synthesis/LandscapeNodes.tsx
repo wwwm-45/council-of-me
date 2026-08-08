@@ -84,6 +84,7 @@ function InteractiveNode({
       aria-describedby={statusId}
       data-node-id={id}
       data-node-type={type}
+      data-radius={radius}
       data-x={x}
       data-y={y}
       data-selected={state.selected}
@@ -174,6 +175,7 @@ export function CenterNode({
   insight,
   delay,
   onClick,
+  radius = 100,
   state = EMPTY_STATE,
 }: {
   x: number;
@@ -182,8 +184,10 @@ export function CenterNode({
   insight: string;
   delay: number;
   onClick?: () => void;
+  radius?: number;
   state?: LandscapeNodeState;
 }) {
+  const box = Math.round(radius * 1.64);
   return (
     <InteractiveNode
       id="center"
@@ -191,7 +195,7 @@ export function CenterNode({
       ariaLabel={`核心议题：${dilemma}`}
       x={x}
       y={y}
-      radius={100}
+      radius={radius}
       focusColor="#ffffff"
       state={state}
       delay={delay}
@@ -201,18 +205,18 @@ export function CenterNode({
         className={state.selected ? 'scale-105 drop-shadow-[0_0_25px_rgba(99,102,241,0.8)]' : 'scale-100'}
         style={{ transformOrigin: `${x}px ${y}px` }}
       >
-        <circle cx={x} cy={y} r={140} fill="rgba(99,102,241,0.2)" filter="blur(30px)" className="animate-pulse-slow" pointerEvents="none" />
-        <StateIndicators x={x} y={y} radius={100} color="#818cf8" state={state} />
-        <circle cx={x} cy={y} r={100} fill="rgba(30,27,75,0.65)" stroke="rgba(99,102,241,0.6)" strokeWidth={1.5} />
-        <circle cx={x} cy={y} r={90} fill="rgba(99,102,241,0.15)" filter="blur(15px)" pointerEvents="none" />
-        <foreignObject x={x - 82} y={y - 82} width={164} height={164} pointerEvents="none">
+        <circle cx={x} cy={y} r={radius * 1.4} fill="rgba(99,102,241,0.2)" filter="blur(30px)" className="animate-pulse-slow" pointerEvents="none" />
+        <StateIndicators x={x} y={y} radius={radius} color="#818cf8" state={state} />
+        <circle cx={x} cy={y} r={radius} fill="rgba(30,27,75,0.65)" stroke="rgba(99,102,241,0.6)" strokeWidth={1.5} />
+        <circle cx={x} cy={y} r={radius - 10} fill="rgba(99,102,241,0.15)" filter="blur(15px)" pointerEvents="none" />
+        <foreignObject x={x - box / 2} y={y - box / 2} width={box} height={box} pointerEvents="none">
           <div className="flex h-full w-full flex-col items-center justify-center px-3 text-center">
             <div className="mb-2 text-[12px] font-bold uppercase tracking-[0.2em] text-indigo-300">核心探索</div>
             <span className="line-clamp-3 overflow-hidden text-[16px] font-extrabold leading-snug text-white">{dilemma}</span>
             {insight ? <span className="mt-2 line-clamp-2 overflow-hidden text-[10px] leading-snug text-slate-300">{insight}</span> : null}
           </div>
         </foreignObject>
-        <TraceBadge x={x} y={y} radius={100} traceIndex={state.traceIndex} />
+        <TraceBadge x={x} y={y} radius={radius} traceIndex={state.traceIndex} />
       </g>
     </InteractiveNode>
   );
@@ -224,6 +228,7 @@ export function TensionNode({
   tension,
   delay,
   onClick,
+  radius = 65,
   state = EMPTY_STATE,
 }: {
   x: number;
@@ -231,9 +236,11 @@ export function TensionNode({
   tension: LandscapeDisplayModel['tensions'][number];
   delay: number;
   onClick?: () => void;
+  radius?: number;
   state?: LandscapeNodeState;
 }) {
-  const radius = 65;
+  const compact = radius < 60;
+  const box = Math.round(radius * 1.84);
   return (
     <InteractiveNode
       id={tension.id}
@@ -252,10 +259,10 @@ export function TensionNode({
         <StateIndicators x={x} y={y} radius={radius} color="#a5b4fc" state={state} />
         <circle cx={x} cy={y} r={radius} fill="rgba(30,27,75,0.55)" stroke="rgba(165,180,252,0.55)" strokeWidth={1.5} />
         <circle cx={x} cy={y} r={radius - 10} fill="rgba(165,180,252,0.15)" filter="blur(10px)" pointerEvents="none" />
-        <foreignObject x={x - 60} y={y - 60} width={120} height={120} pointerEvents="none">
+        <foreignObject x={x - box / 2} y={y - box / 2} width={box} height={box} pointerEvents="none">
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-2 text-center">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-indigo-300/80">张力焦点</div>
-            <span className="line-clamp-2 overflow-hidden text-[14px] font-extrabold leading-snug text-white">{tension.label}</span>
+            {compact ? null : <div className="text-[10px] font-bold uppercase tracking-widest text-indigo-300/80">张力焦点</div>}
+            <span className={`line-clamp-2 overflow-hidden font-extrabold leading-snug text-white ${compact ? 'text-[12px]' : 'text-[14px]'}`}>{tension.label}</span>
           </div>
         </foreignObject>
         <TraceBadge x={x} y={y} radius={radius} traceIndex={state.traceIndex} />
@@ -271,6 +278,7 @@ export function VoiceNode({
   delay,
   onClick,
   showLabel = true,
+  radius = 50,
   state = EMPTY_STATE,
 }: {
   x: number;
@@ -279,9 +287,9 @@ export function VoiceNode({
   delay: number;
   onClick?: () => void;
   showLabel?: boolean;
+  radius?: number;
   state?: LandscapeNodeState;
 }) {
-  const radius = 50;
   return (
     <InteractiveNode
       id={voice.id}
@@ -303,7 +311,7 @@ export function VoiceNode({
         <StateIndicators x={x} y={y} radius={radius} color={voice.color} state={state} />
         <circle cx={x} cy={y} r={radius} fill="rgba(15,23,42,0.45)" stroke={voice.color} strokeWidth={1.5} />
         <circle cx={x} cy={y} r={radius - 10} fill={voice.color} opacity={0.2} filter="blur(8px)" pointerEvents="none" />
-        <foreignObject x={x - 45} y={y - 45} width={90} height={90} pointerEvents="none">
+        <foreignObject x={x - (radius - 5)} y={y - (radius - 5)} width={(radius - 5) * 2} height={(radius - 5) * 2} pointerEvents="none">
           <div className="flex h-full w-full items-center justify-center px-1 text-center">
             <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[14px] font-extrabold" style={{ color: voice.color }}>
               {showLabel ? voice.label : voice.label.slice(0, 2)}
@@ -408,9 +416,23 @@ export function LandscapeDefs() {
   );
 }
 
+const EDGE_LEGEND = [
+  { type: 'affinity', label: '亲和', stroke: '#818cf8', dash: undefined },
+  { type: 'opposition', label: '对立', stroke: '#fbbf24', dash: '5 4' },
+  { type: 'support', label: '支持', stroke: '#34d399', dash: '2 4' },
+] as const;
+
 export function MapLegend() {
   return (
-    <div className="absolute bottom-6 flex gap-5 rounded-full border border-slate-700/50 bg-slate-900/60 px-5 py-2.5 text-xs font-medium text-slate-300 backdrop-blur-md">
+    <div className="absolute bottom-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-full border border-slate-700/50 bg-slate-900/60 px-5 py-2.5 text-xs font-medium text-slate-300 backdrop-blur-md">
+      {EDGE_LEGEND.map((edge) => (
+        <div key={edge.type} className="flex items-center gap-2" data-legend-edge={edge.type}>
+          <svg width={22} height={6} aria-hidden="true">
+            <line x1={1} y1={3} x2={21} y2={3} stroke={edge.stroke} strokeWidth={2.5} strokeDasharray={edge.dash} />
+          </svg>
+          {edge.label}
+        </div>
+      ))}
       {(Object.keys(OUTCOME_LABELS) as Array<keyof typeof OUTCOME_LABELS>).map((type) => (
         <div key={type} className="flex items-center gap-2">
           <span

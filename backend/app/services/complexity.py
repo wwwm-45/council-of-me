@@ -58,9 +58,13 @@ def calculate_complexity_score(profile: dict[str, Any]) -> float:
 
 
 def assign_debate_level(score: float) -> tuple[str, int, int]:
-    """Return (debate_level, agent_count, max_rounds)."""
+    """Return (debate_level, agent_count, max_rounds).
+
+    max_rounds must match debate.round_state.COMPLEXITY_ROUNDS — that table
+    is what actually gates RoundStateMachine.advance().
+    """
     if score < 40:
-        return "L1", 2, 3
+        return "L1", 2, 2
     if score < 70:
-        return "L2", 4, 4
-    return "L3", 5, 5
+        return "L2", 4, 3
+    return "L3", 5, 4

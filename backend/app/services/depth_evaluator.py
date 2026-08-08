@@ -172,6 +172,14 @@ def latch_tension_visible(
     )
 
 
+_EXPLICIT_STRUGGLE_MARKERS: tuple[str, ...] = (
+    "纠结",
+    "两难",
+    "左右为难",
+    "拿不定",
+    "不知道该选",
+)
+
 _OWNERSHIP_MARKERS: tuple[str, ...] = (
     "更怕",
     "我最怕",
@@ -194,6 +202,13 @@ def detect_ownership_language(text: str | None) -> bool:
     if not text:
         return False
     return any(marker in text for marker in _OWNERSHIP_MARKERS)
+
+
+def detect_explicit_struggle(text: str | None) -> bool:
+    """Ordinary first-person dilemma language already owns the struggle."""
+    if not text:
+        return False
+    return any(marker in text for marker in _EXPLICIT_STRUGGLE_MARKERS)
 
 
 def _last_user_text(conversation_history: list[dict]) -> str:
@@ -260,11 +275,13 @@ class DepthEvaluator:
 
         saturation = SaturationSignals.from_dict(parsed.get("saturation_signals") or {})
         depth_layer = _normalize_layer(parsed.get("depth_layer"), normalized_layer)
-        tension_visible = _coerce_bool(parsed.get("tension_visible"), False)
+        last_user_text = _last_user_text(conversation_history)
+        explicit_struggle = detect_explicit_struggle(last_user_text)
+        tension_visible = _coerce_bool(parsed.get("tension_visible"), False) or explicit_struggle
         tension_visible = latch_tension_visible(tension_visible, previous_evaluations, depth_layer)
         tension_owned = _coerce_bool(parsed.get("tension_owned"), False)
-        if not tension_owned and tension_visible and detect_ownership_language(
-            _last_user_text(conversation_history)
+        if not tension_owned and tension_visible and (
+            explicit_struggle or detect_ownership_language(last_user_text)
         ):
             tension_owned = True
         tension_owned = latch_tension_owned(tension_owned, previous_evaluations, depth_layer)
@@ -339,11 +356,11 @@ class DepthEvaluator:
             )
         cards_block = "\n".join(card_lines) or "(none)"
 
-        return f"""Evaluate the current depth of this counseling conversation using a three-layer progressive deepening model.
+        return f"""Evaluate the current depth of this dilemma interview using a three-layer progressive deepening model.
 
 Three-layer progressive deepening:
-- layer 1: narrative grounding - user is laying out what happened (facts, who, when, what).
-- layer 2: tension confrontation - user is comparing the two sides of the dilemma side by side (each side's cost, fear, limit).
+- layer 1: understand the user's whole situation and what they see as the central dilemma. Do not require exhaustive factual detail.
+- layer 2: understand why the central dilemma is hard: the cost, fear, hope, or attachment carried by either side.
 - layer 3: deep conflict involving a stated-self/actual-action gap or unsaid sentence.
 
 Emotional states must be one of: calm, activated, intense.
@@ -351,8 +368,8 @@ If emotional_state is "intense", then strategy_hint must be "containment".
 If the conversation should close, return strategy_hint as "closing".
 graduation_ready applies only to the current active transition (1 -> 2 or 2 -> 3), not the whole conversation.
 depth_layer must be 1, 2, or 3.
-tension_visible is true when the dialogue this layer has surfaced at least one bipolar/undecided tension with both poles named (not just one side mentioned).
-tension_owned is true when the user has explicitly claimed at least one surfaced tension as their own using first-person ownership language (e.g. "我心里两个声音在打架", "我自己拉扯"), not merely describing the dilemma abstractly.
+tension_visible is true when the user names a choice, conflict, or undecided situation. "我在 A 和 B 之间纠结" already makes the tension visible; costs do not need to be listed first.
+tension_owned is true when the user presents the struggle as their own, including ordinary wording such as "我在 A 和 B 之间纠结/两难". Never require ritual wording such as "两个声音" or "两股力量".
 
 Conversation history:
 {history_block}

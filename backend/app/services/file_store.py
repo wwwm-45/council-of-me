@@ -4,9 +4,7 @@ SessionFileStore: Incremental disk persistence for session data.
 Writes JSON files to disk after each interaction so data survives server restarts.
 Each session gets a folder: {SESSION_EXPORT_DIR}/{session_id}/
 Files are updated in place (atomic write via temp file + rename).
-
-On new server start, sessions start fresh (no loading from disk).
-The files on disk are purely for data preservation / post-hoc analysis.
+The standalone repository can read these exports back when its in-memory state is empty.
 """
 import json
 import logging
@@ -132,6 +130,12 @@ def load_elicitation(session_id: UUID | str) -> dict:
 def save_conflict_profile(session_id: UUID | str, profile: dict) -> None:
     """Save/update conflict_profile.json."""
     _write_json_atomic(_session_dir(session_id) / "conflict_profile.json", profile)
+
+
+def load_conflict_profile(session_id: UUID | str) -> dict:
+    """Load conflict_profile.json."""
+    data = _read_json(_session_dir(session_id) / "conflict_profile.json")
+    return data if isinstance(data, dict) else {}
 
 
 def save_elicitation_outcome(session_id: UUID | str, outcome: dict) -> None:

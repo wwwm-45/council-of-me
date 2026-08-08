@@ -49,9 +49,9 @@ _profile_generator = ConflictProfileGenerator()
 _psyche_builder = PsycheBundleBuilder()
 _ALLOWED_STATUSES = {"portrait_pending", "profile_pending", "complexity_pending", "identity_pending"}
 _LEVEL_CONFIG: dict[str, tuple[int, int]] = {
-    "L1": (2, 3),
-    "L2": (4, 4),
-    "L3": (5, 5),
+    "L1": (2, 2),
+    "L2": (4, 3),
+    "L3": (5, 4),
 }
 
 

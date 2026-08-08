@@ -38,6 +38,21 @@ export type NodeType = 'center' | 'tension' | 'voice' | 'consensus' | 'irreducib
 
 export type ImmersivePanelMode = 'closed' | 'explore' | 'dialogue' | 'trace';
 
+export type GraphEdgeType = 'affinity' | 'opposition' | 'support' | 'outcome';
+
+export interface GraphEdge {
+  id: string;
+  type: GraphEdgeType;
+  source: string;
+  target: string;
+  /** affinity 边为相似度 0-1，其余恒为 1 */
+  weight: number;
+  /** opposition 边所属张力 */
+  tensionId?: string;
+  /** opposition 边中声部所站的极 */
+  side?: 'a' | 'b';
+}
+
 export interface LandscapeDisplayModel {
   center: {
     id: 'center';
@@ -49,7 +64,8 @@ export interface LandscapeDisplayModel {
     id: string;
     label: string;
     intensity: number;
-    agentIds: string[];
+    poleAAgents: string[];
+    poleBAgents: string[];
     poleA: string;
     poleB: string;
   }>;
@@ -64,7 +80,9 @@ export interface LandscapeDisplayModel {
     id: string;
     type: 'consensus' | 'productive' | 'irreducible';
     label: string;
+    supportingAgents: string[];
   }>;
+  edges: GraphEdge[];
 }
 
 export const FEELING_LABELS: Record<FeelingId, string> = {

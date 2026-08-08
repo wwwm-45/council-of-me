@@ -4,13 +4,40 @@ Sensitive fields (core_dilemma, etc.) can be encrypted before write; decrypt on 
 """
 from datetime import datetime, timezone
 from typing import Any, Optional
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from app.models.session import DebateSessionRow
 
 
+def _as_datetime(value: Any) -> Optional[datetime]:
+    """Parse persisted timestamps and always return timezone-aware values."""
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _as_uuid(value: Any) -> Optional[UUID]:
+    if isinstance(value, UUID):
+        return value
+    if isinstance(value, str):
+        try:
+            return UUID(value)
+        except ValueError:
+            return None
+    return None
+
+
 class SessionRepository:
-    """Session data access. Uses in-memory store when DB not configured (for tests)."""
+    """Session data access with disk recovery when the DB is not configured."""
 
     def __init__(self, pool=None) -> None:
         self._pool = pool
@@ -74,7 +101,9 @@ class SessionRepository:
                     return None
                 return self._row_to_model(row)
         data = self._memory.get(session_id)
-        if not data:
+        if data is None:
+            data = self._rehydrate_from_disk(session_id)
+        if data is None:
             return None
         return DebateSessionRow(
             session_id=data["session_id"],
@@ -98,6 +127,57 @@ class SessionRepository:
             crisis_returned_at=data.get("crisis_returned_at"),
             rounds_since_crisis_return=data.get("rounds_since_crisis_return", 0),
         )
+
+    def _rehydrate_from_disk(self, session_id: UUID) -> Optional[dict[str, Any]]:
+        """Rebuild a standalone row from the session's incremental exports."""
+        from app.services.file_store import (
+            load_conflict_profile,
+            load_elicitation,
+            load_identity_cards,
+            load_session_meta,
+        )
+
+        meta = load_session_meta(session_id)
+        if not meta:
+            return None
+
+        elicitation = load_elicitation(session_id)
+        conflict_profile = load_conflict_profile(session_id)
+        identity_cards = load_identity_cards(session_id)
+        created_at = _as_datetime(meta.get("created_at")) or datetime.fromtimestamp(0, timezone.utc)
+        user_id = _as_uuid(meta.get("user_id")) or uuid5(
+            NAMESPACE_URL,
+            f"council-of-me:standalone-session:{session_id}",
+        )
+
+        def profile_value(key: str) -> Any:
+            value = meta.get(key)
+            return value if value is not None else conflict_profile.get(key)
+
+        data = {
+            "session_id": session_id,
+            "user_id": user_id,
+            "created_at": created_at,
+            "completed_at": _as_datetime(meta.get("completed_at")),
+            "core_dilemma": profile_value("core_dilemma") or "",
+            "dilemma_type": profile_value("dilemma_type"),
+            "complexity_score": profile_value("complexity_score"),
+            "debate_level": profile_value("debate_level"),
+            "max_rounds": profile_value("max_rounds"),
+            "agent_count": profile_value("agent_count"),
+            "total_rounds": meta.get("total_rounds"),
+            "total_duration_seconds": meta.get("total_duration_seconds"),
+            "user_interventions_count": meta.get("user_interventions_count") or 0,
+            "status": meta.get("status") or "created",
+            "framing_preference": meta.get("framing_preference"),
+            "elicitation_history": elicitation or None,
+            "conflict_profile_snapshot": conflict_profile or None,
+            "identity_cards_snapshot": identity_cards or None,
+            "crisis_returned_at": _as_datetime(meta.get("crisis_returned_at")),
+            "rounds_since_crisis_return": meta.get("rounds_since_crisis_return") or 0,
+        }
+        self._memory[session_id] = data
+        return data
 
     async def update_status(self, session_id: UUID, status: str) -> None:
         if self._pool:

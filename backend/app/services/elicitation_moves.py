@@ -81,7 +81,18 @@ def consecutive_binary_questions(history: list[dict] | None) -> int:
 
 _VALUE_MIN_COUNT = 2
 
-_PROBE_DEFER_MARKERS: tuple[str, ...] = ("说不清", "理不清", "分不清", "不知道")
+_PROBE_DEFER_MARKERS: tuple[str, ...] = (
+    "说不清",
+    "理不清",
+    "分不清",
+    "不知道",
+    "什么意思",
+    "没听懂",
+    "没看懂",
+    "没明白",
+    "不明白",
+    "不理解",
+)
 _PROBE_DEFER_INTENSITY = 0.8
 
 
@@ -330,6 +341,19 @@ class MoveDispatcher:
 
         original_intent = str(plan.get("intent") or "")
 
+        if plan.get("user_turn_kind") == "clarify_request" or original_intent == "clarify_back":
+            return self._with_move(
+                result,
+                move="clarify_back",
+                intent="clarify_back",
+                original_intent=original_intent,
+                hard_instruction=(
+                    "用户没有听懂上一问。先用一句平实的话说明上一问真正想了解什么，"
+                    "再结合当前困境换成一个更简单的问题。不要推进层级，不要补采访字段，"
+                    "也不要转向价值、利益相关者或其他新话题。"
+                ),
+            )
+
         if evaluation.strategy_hint == "self_statement_request":
             return self._with_move(
                 result,
@@ -337,42 +361,9 @@ class MoveDispatcher:
                 intent=_clamp_intent("probe_threshold", layer),
                 original_intent=original_intent,
                 hard_instruction=(
-                    "用户已经把困境讲到了相当深度，但还没用第一人称把两边说出来。"
-                    "这一轮只问一个问题，让用户自己用一句话填出两边：\n"
-                    "「如果让你自己说，你心里这两股力量在拉扯——一边是 _____，"
-                    "另一边是 _____。你来填这两边。」\n"
-                    "可以微调措辞但模板骨架不变；问完就停，不要替用户填、不要追问其他、不要解释。"
-                ),
-            )
-
-        if _trigger_name_both_poles(focus_card, evaluation):
-            target_intent = "probe_threshold" if layer == 1 else "probe_cost"
-            return self._with_move(
-                result,
-                move="name_both_poles",
-                intent=_clamp_intent(target_intent, layer),
-                original_intent=original_intent,
-                hard_instruction=_name_both_poles_instruction(focus_card),
-            )
-
-        abstraction = _trigger_make_concrete(
-            history,
-            focus_card,
-            evaluation,
-            self._abstraction_words,
-        )
-        if abstraction:
-            return self._with_move(
-                result,
-                move="make_concrete",
-                intent=_clamp_intent("probe_threshold", layer),
-                original_intent=original_intent,
-                hard_instruction=(
-                    f"用户用了抽象词“{abstraction}”。这一轮不要让用户继续用抽象词解释，"
-                    "用一个开放的问题，把它还原成一个具体画面：那一刻具体发生了什么、"
-                    "用户在做什么、心里或身体是什么感觉。如果要问到旁边的人，"
-                    "就落在「是谁、对方说了或做了什么」上；"
-                    "不要问「身边有没有人」这种只能回答有或没有、问完就断的问题。"
+                    "用户已经谈到困境的两边，但还没有说清各自为什么难以放下。"
+                    "沿着用户自己的说法，自然地邀请他讲讲其中一边最牵动自己的地方。"
+                    "不要使用填空题，不要要求他说‘两股力量’或‘两个声音’，也不要替他组织标准答案。"
                 ),
             )
 
@@ -385,57 +376,16 @@ class MoveDispatcher:
                 original_intent=original_intent,
                 hard_instruction=(
                     "用户在索要建议。这一轮不直接给建议、方向或答案。"
-                    "先承认这个问题很重要，然后回到张力：这件事里两个声音在拉扯，"
-                    "先听清它们各自害怕什么、想保护什么。"
+                    "先承认这个问题很重要，然后回到用户正在权衡的困境，"
+                    "继续理解他担心失去什么、又想保护什么。"
                 ),
             )
 
-        interrupting = _coverage_probe_would_interrupt(history, extracted_info)
-
-        # meaning_probe_pending: by layer 3 the session is owed one meaning-layer
-        # question even when the (possibly parroted) values list looks covered.
-        if _trigger_probe_values(
-            extracted_info, evaluation, layer, coverage_probe_on_cooldown, interrupting
-        ) or (
-            meaning_probe_pending
-            and extracted_info is not None
-            and _coverage_gates(evaluation, layer, coverage_probe_on_cooldown, interrupting)
-        ):
-            target_intent = "probe_meaning" if layer == 2 else "probe_value_conflict"
-            return self._with_move(
-                result,
-                move="probe_values",
-                intent=_clamp_intent(target_intent, layer),
-                original_intent=original_intent,
-                hard_instruction=(
-                    "用户已经把困境讲到了一定深度，但还没说清这件事对他意味着什么、"
-                    "他真正在乎的是什么。这一轮只问一个问题，把价值那一层请出来，"
-                    "用平实、口语的说法，比如「做这件事对你来说最重要的是什么？」，"
-                    "或者「如果过几年回头看现在，你最不想丢掉的是什么？」。"
-                    "开头先用半句承接用户上一句里的一个具体说法，再自然转到这个问题，"
-                    "不要让话题显得被硬切。"
-                    "不要替用户总结价值，让他自己说；问完就停，不要追问其他、不要给建议。"
-                ),
-            )
-
-        if _trigger_probe_stakeholders(
-            extracted_info, evaluation, layer, coverage_probe_on_cooldown, interrupting
-        ):
-            return self._with_move(
-                result,
-                move="probe_stakeholders",
-                intent=_clamp_intent("probe_cost", layer),
-                original_intent=original_intent,
-                hard_instruction=(
-                    "到现在为止，用户基本只在讲自己，还没提到这件事里还有谁被牵动。"
-                    "这一轮只问一个问题，把相关的人请进来：这个决定里，除了你自己，"
-                    "还有谁会被影响？谁的反应或感受是你最放不下的？"
-                    "开头先用半句承接用户上一句里的一个具体说法，再自然转到这个问题，"
-                    "不要让话题显得被硬切。不要替用户列举，"
-                    "让他自己说；问完就停，不要追问其他、不要给建议。"
-                ),
-            )
-
+        # Values and stakeholders used to be injected here whenever an extraction field
+        # was empty. That made the harness chase its schema instead of the user's current
+        # dilemma (e.g. answering “什么意思” with a brand-new values question). The planner
+        # may still choose a meaning/cost direction when it fits the conversation, but an
+        # empty field no longer overrides that direction.
         return result
 
     def _with_move(

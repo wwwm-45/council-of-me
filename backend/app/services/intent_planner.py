@@ -73,6 +73,26 @@ ALLOWED_USER_TURN_KINDS = {
     "emotional_spike",
 }
 
+_CLARIFICATION_MARKERS: tuple[str, ...] = (
+    "什么意思",
+    "没听懂",
+    "没看懂",
+    "没明白",
+    "不明白",
+    "不理解",
+    "你是说",
+    "能解释",
+    "说清楚",
+)
+
+_EXPLICIT_STRUGGLE_MARKERS: tuple[str, ...] = (
+    "纠结",
+    "两难",
+    "左右为难",
+    "拿不定",
+    "不知道该选",
+)
+
 _INTENT_NEAR_MATCH = {
     "probe_identity_gap": "probe_self_image",
     "probe_value_conflict": "probe_cost",
@@ -132,6 +152,35 @@ def _user_messages_window(history: list[dict], n: int = 6) -> list[str]:
         if isinstance(message, dict) and message.get("role") == "user"
     ]
     return users[-n:]
+
+
+def _latest_user_text(history: list[dict]) -> str:
+    window = _user_messages_window(history, n=1)
+    return window[-1].strip() if window else ""
+
+
+def _is_clarification_request(text: str | None) -> bool:
+    content = str(text or "").strip()
+    return bool(content) and any(marker in content for marker in _CLARIFICATION_MARKERS)
+
+
+def _owns_a_struggle(text: str | None) -> bool:
+    content = str(text or "").strip()
+    return bool(content) and any(marker in content for marker in _EXPLICIT_STRUGGLE_MARKERS)
+
+
+def _optional_bool(value: object) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in {0, 1}:
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+    return None
 
 
 def _focus_quote_is_substring(focus_quote: str, history: list[dict]) -> bool:
@@ -198,6 +247,7 @@ class IntentPlanner:
         tension_cards: list[TensionCard | dict],
         current_layer: int,
         latest_extracted_info: dict[str, Any] | None = None,
+        current_focus_id: str | None = None,
     ) -> dict[str, Any]:
         layer = _normalize_layer(current_layer)
         prompt = self._build_prompt(
@@ -205,6 +255,7 @@ class IntentPlanner:
             tension_cards,
             layer,
             latest_extracted_info or {},
+            current_focus_id,
         )
         try:
             raw = await self._llm(
@@ -215,9 +266,20 @@ class IntentPlanner:
             )
         except Exception:
             logger.exception("IntentPlanner LLM call failed")
-            return self._fallback(history=history, layer=layer)
+            return self._fallback(
+                history=history,
+                layer=layer,
+                extracted_info=latest_extracted_info or {},
+                current_focus_id=current_focus_id,
+            )
 
-        return self._normalize(_parse_json(raw), history=history, layer=layer)
+        return self._normalize(
+            _parse_json(raw),
+            history=history,
+            layer=layer,
+            extracted_info=latest_extracted_info or {},
+            current_focus_id=current_focus_id,
+        )
 
     def _normalize(
         self,
@@ -225,13 +287,26 @@ class IntentPlanner:
         *,
         history: list[dict],
         layer: int,
+        extracted_info: dict[str, Any] | None = None,
+        current_focus_id: str | None = None,
     ) -> dict[str, Any]:
+        latest_user = _latest_user_text(history)
         if not parsed:
-            return self._fallback(history=history, layer=layer)
+            return self._fallback(
+                history=history,
+                layer=layer,
+                extracted_info=extracted_info,
+                current_focus_id=current_focus_id,
+            )
 
         focus_quote = str(parsed.get("focus_quote") or "").strip()
         if not _focus_quote_is_substring(focus_quote, history):
-            return self._fallback(history=history, layer=layer)
+            return self._fallback(
+                history=history,
+                layer=layer,
+                extracted_info=extracted_info,
+                current_focus_id=current_focus_id,
+            )
 
         intent = str(parsed.get("intent") or "").strip()
         if intent not in ALLOWED_INTENTS:
@@ -241,6 +316,24 @@ class IntentPlanner:
         user_turn_kind = str(parsed.get("user_turn_kind") or "").strip()
         if user_turn_kind not in ALLOWED_USER_TURN_KINDS:
             user_turn_kind = "narrate_fact"
+        if _is_clarification_request(latest_user):
+            # Dialogue repair is not a depth move. Never let a planner classification
+            # or a coverage goal turn "什么意思" into a brand-new interview question.
+            user_turn_kind = "clarify_request"
+            intent = "clarify_back"
+            focus_quote = latest_user[:30]
+        elif _owns_a_struggle(latest_user):
+            user_turn_kind = "own_a_struggle"
+            if intent in {"probe_fact", "probe_threshold"}:
+                intent = _clamp_intent("probe_meaning", layer)
+
+        core_dilemma = str((extracted_info or {}).get("core_dilemma") or "").strip()
+        if layer == 1 and core_dilemma and intent in {"probe_fact", "probe_threshold"}:
+            # Once the shared dilemma is known, L1 should understand why it is difficult,
+            # not diagnose another domain noun ("实验设计", "合适的公司", etc.).
+            intent = "probe_meaning"
+            if _focus_quote_is_substring(core_dilemma, history):
+                focus_quote = core_dilemma
 
         avoid_quotes: list[str] = []
         seen_avoid: set[str] = set()
@@ -262,6 +355,11 @@ class IntentPlanner:
             focus_card_id = focus_card_id.strip()
 
         rationale = str(parsed.get("rationale") or "").strip()[:30]
+        focus_answer_relevant = (
+            _optional_bool(parsed.get("focus_answer_relevant"))
+            if current_focus_id
+            else None
+        )
         return {
             "user_turn_kind": user_turn_kind,
             "intent": intent,
@@ -269,9 +367,49 @@ class IntentPlanner:
             "focus_card_id": focus_card_id,
             "avoid_quotes": avoid_quotes,
             "rationale": rationale or "planner_ok",
+            "focus_answer_relevant": focus_answer_relevant,
         }
 
-    def _fallback(self, *, history: list[dict], layer: int) -> dict[str, Any]:
+    def _fallback(
+        self,
+        *,
+        history: list[dict],
+        layer: int,
+        extracted_info: dict[str, Any] | None = None,
+        current_focus_id: str | None = None,
+    ) -> dict[str, Any]:
+        latest_user = _latest_user_text(history)
+        if _is_clarification_request(latest_user):
+            return {
+                "user_turn_kind": "clarify_request",
+                "intent": "clarify_back",
+                "focus_quote": latest_user[:30],
+                "focus_card_id": None,
+                "avoid_quotes": [],
+                "rationale": "先解释上一问",
+                "focus_answer_relevant": False if current_focus_id else None,
+            }
+        if _owns_a_struggle(latest_user):
+            return {
+                "user_turn_kind": "own_a_struggle",
+                "intent": _clamp_intent("probe_meaning", layer),
+                "focus_quote": _extract_fallback_quote(history),
+                "focus_card_id": None,
+                "avoid_quotes": [],
+                "rationale": "理解整体拉扯",
+                "focus_answer_relevant": False if current_focus_id else None,
+            }
+        core_dilemma = str((extracted_info or {}).get("core_dilemma") or "").strip()
+        if layer == 1 and core_dilemma:
+            return {
+                "user_turn_kind": "answer_with_evidence",
+                "intent": "probe_meaning",
+                "focus_quote": _extract_fallback_quote(history),
+                "focus_card_id": None,
+                "avoid_quotes": [],
+                "rationale": "继续理解核心困境",
+                "focus_answer_relevant": False if current_focus_id else None,
+            }
         return {
             "user_turn_kind": "narrate_fact",
             "intent": LAYER_FALLBACK_INTENT[layer],
@@ -279,6 +417,7 @@ class IntentPlanner:
             "focus_card_id": None,
             "avoid_quotes": [],
             "rationale": "planner_fallback",
+            "focus_answer_relevant": False if current_focus_id else None,
         }
 
     def _build_prompt(
@@ -287,6 +426,7 @@ class IntentPlanner:
         tension_cards: list[TensionCard | dict],
         layer: int,
         extracted_info: dict[str, Any],
+        current_focus_id: str | None = None,
     ) -> str:
         dialogue = []
         for message in history[-12:]:
@@ -312,13 +452,24 @@ class IntentPlanner:
 
         allowed = " / ".join(sorted(LAYER_ALLOWED[layer]))
         context = json.dumps(extracted_info, ensure_ascii=False, default=str)
-        return f"""你是意图规划者。读对话、张力卡状态和当前层级，只决定下一轮引导意图与用户原话焦点，不写问题。
+        current_focus = next(
+            (item for item in cards if item.get("id") == current_focus_id),
+            None,
+        )
+        return f"""你是困境访谈的方向规划者。只决定下一轮应该理解什么，不写具体问题。
 
-只输出 JSON，字段为 user_turn_kind、intent、focus_quote、focus_card_id、avoid_quotes、rationale。
+总目标：始终服务于用户正在经历的整体困境，而不是收集完所有事实。
+- 用户已经明确说出 A 与 B 的纠结时，视为已说出拉扯，不要继续把对话当成纯事实采集。
+- 具体细节只有在能解释“为什么难选、各自牵动什么”时才值得追问；不要进入论文、工作或生活领域的技术排查。
+- 优先回应用户最后一句的沟通意图。若用户说“什么意思、没听懂、没明白”等，必须选择 clarify_request + clarify_back，先修复对话，不开新方向。
+- 在 L1 理解完整处境；L2 理解代价、担心与舍不得；L3 才探索更深的价值、信念和自我期待。
+
+只输出 JSON，字段为 user_turn_kind、intent、focus_quote、focus_card_id、avoid_quotes、rationale、focus_answer_relevant。
 - user_turn_kind: narrate_fact|own_a_struggle|answer_with_evidence|clarify_request|off_topic|emotional_spike
 - focus_quote: 最近六条用户消息中的 4-30 字原文子串，不得改写
 - avoid_quotes: 已经追问过的片段，最多 6 个
 - rationale: 不超过 30 字
+- focus_answer_relevant: 若“上一轮焦点”存在，判断用户最新回答是否确实为这张焦点卡增加了相关信息，输出 true 或 false；不要只看回答长度。若不存在则输出 null
 
 意图含义：
 - probe_fact：问事实细节
@@ -336,13 +487,16 @@ class IntentPlanner:
 - hand_off：停止追问并移交
 
 当前层级：L{layer}；允许意图：{allowed}
-卡型提示：bipolar 可关注代价，undecided 可关注边界或担忧，tangled 可关注诉求拉扯。
+张力卡和抽取信息只是背景，不是待完成的字段清单；它们与用户最新表达冲突时，以用户最新表达为准。
 
 最近对话：
 {chr(10).join(dialogue) or "(空)"}
 
 张力卡：
 {json.dumps(cards, ensure_ascii=False)}
+
+上一轮焦点：
+{json.dumps(current_focus, ensure_ascii=False)}
 
 既有抽取信息：
 {context}

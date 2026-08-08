@@ -13,10 +13,11 @@ from app.services.llm import generate, is_llm_error
 
 logger = logging.getLogger(__name__)
 
+# (agent_count, max_rounds); max_rounds mirrors debate.round_state.COMPLEXITY_ROUNDS
 _LEVEL_CONFIG: dict[str, tuple[int, int]] = {
-    "L1": (2, 3),
-    "L2": (4, 4),
-    "L3": (5, 5),
+    "L1": (2, 2),
+    "L2": (4, 3),
+    "L3": (5, 4),
 }
 
 

@@ -5,6 +5,7 @@ import { editLastElicitationMessage, finishElicitation, postElicitation, streamE
 import { getSession as getStore, setSession } from '../store/session';
 import { readStageCache, writeStageCache } from '../store/stageCache';
 import CrisisModal from '../components/CrisisModal';
+import { buildCouncilOpeningMessage } from '../content/interview';
 
 const NOISE_PATTERN = `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`;
 
@@ -109,11 +110,10 @@ function cleanDisplayName(value: string | null | undefined): string {
 }
 
 function buildOpeningMessages(displayName?: string | null): Message[] {
-  const name = cleanDisplayName(displayName);
   return [
     {
       role: 'assistant',
-      content: `${name ? `${name}，` : ''}我是这场内心对话的引导者。在请你内心不同的声音上场之前，这一段我们先慢慢把你最近的纠结聊清楚——我只会问问题，不下判断。最近有没有哪一件事，让你在工作、生活或学习里反复纠结、好像被两头拉扯？不着急，先说说你最先想到的那件。`,
+      content: buildCouncilOpeningMessage(displayName),
     },
   ];
 }
@@ -137,7 +137,9 @@ export default function ElicitationPage() {
   const store = getStore();
   const sid = store.sessionId;
   const cached = readStageCache<ElicitationPageCache>(sid, 'elicitation');
-  const [messages, setMessages] = useState<Message[]>(() => cached?.messages ?? buildOpeningMessages(store.userDisplayName));
+  const [messages, setMessages] = useState<Message[]>(() => (
+    cached?.messages ?? buildOpeningMessages(store.userDisplayName)
+  ));
   const [input, setInput] = useState(() => cached?.input ?? '');
   const [loading, setLoading] = useState(false);
   const [depthScore, setDepthScore] = useState(() => cached?.depthScore ?? 0);

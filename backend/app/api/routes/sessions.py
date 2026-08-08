@@ -17,6 +17,7 @@ from app.api.schemas.sessions import (
     FramingBody,
 )
 from app.repositories.session_repo import SessionRepository
+from app.services.debate.round_state import COMPLEXITY_ROUNDS
 from app.services.safety import SafetyMonitor
 from app.services.file_store import (
     load_session_meta,
@@ -37,6 +38,12 @@ def _get_repo() -> SessionRepository:
 
 
 _DEBUG_SESSION_SOURCE_ID = "8dd612dd-5877-4bb1-a0a3-533278c5dd9e"
+
+# /debug-skip fabricates a profile when no fixture supplies one. Round count must
+# come from the authoritative table (app.services.debate.round_state), never a literal.
+_DEBUG_SKIP_LEVEL = "L3"
+_DEBUG_SKIP_AGENT_COUNT = 5
+_DEBUG_SKIP_MAX_ROUNDS = COMPLEXITY_ROUNDS[_DEBUG_SKIP_LEVEL]
 
 
 def _debug_session_source() -> Path:
@@ -86,9 +93,9 @@ def _conflict_profile_from_elicitation(elicitation: dict) -> dict:
         extracted = {}
 
     profile = dict(extracted)
-    profile.setdefault("debate_level", "L3")
-    profile.setdefault("agent_count", 5)
-    profile.setdefault("max_rounds", 5)
+    profile.setdefault("debate_level", _DEBUG_SKIP_LEVEL)
+    profile.setdefault("agent_count", _DEBUG_SKIP_AGENT_COUNT)
+    profile.setdefault("max_rounds", _DEBUG_SKIP_MAX_ROUNDS)
     return profile
 
 
@@ -111,9 +118,9 @@ async def debug_skip():
         conflict_profile = _conflict_profile_from_elicitation(elicitation)
 
     framing = session_meta.get("framing_preference", "inner_parts")
-    debate_level = conflict_profile.get("debate_level", "L3")
-    agent_count = int(conflict_profile.get("agent_count", 5))
-    max_rounds = int(conflict_profile.get("max_rounds", 5))
+    debate_level = conflict_profile.get("debate_level", _DEBUG_SKIP_LEVEL)
+    agent_count = int(conflict_profile.get("agent_count", _DEBUG_SKIP_AGENT_COUNT))
+    max_rounds = int(conflict_profile.get("max_rounds", _DEBUG_SKIP_MAX_ROUNDS))
     core_dilemma = conflict_profile.get("core_dilemma", "")
 
     repo = _get_repo()
